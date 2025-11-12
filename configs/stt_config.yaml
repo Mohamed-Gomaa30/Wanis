@@ -1,0 +1,41 @@
+# STT Configuration
+models:
+  baseline:
+    - "openai/whisper-tiny"
+    - "openai/whisper-small"
+    - "openai/whisper-medium"
+
+datasets:
+  egyptian_asr:
+    name: "MightyStudent/Egyptian-ASR-MGB-3"
+    split: "train"
+    audio_col: "audio"
+    text_col: "sentence"
+    test_split: "test" 
+
+  arabic_egy:
+    name: "MAdel121/arabic-egy-cleaned"
+    split: "train"
+    audio_col: "audio"
+    text_col: "text"
+    test_split: "test"
+
+training:
+  use_lora: true
+  lora_r: 16
+  lora_alpha: 32
+  target_modules: ["q_proj", "v_proj"]
+  lora_dropout: 0.1
+  batch_size: 8
+  gradient_accumulation_steps: 2
+  learning_rate: 1e-4
+  warmup_steps: 500
+  max_steps: 5000
+  eval_steps: 500
+  save_steps: 1000
+  logging_steps: 100
+
+evaluation:
+  metrics: ["wer", "cer", "accuracy"]
+  device: "cuda"
+  max_samples: 1000

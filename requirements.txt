@@ -1,0 +1,11 @@
+torch==2.8
+torchcodec==0.7
+transformers
+datasets 
+evaluate==0.4.0
+jiwer==2.5.1
+numpy==1.24.3  
+pandas==2.0.3
+tqdm==4.65.0
+pyyaml==6.0
+soundfile==0.12.0
