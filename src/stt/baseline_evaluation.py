@@ -19,7 +19,7 @@ class STTEvaluator:
     def __init__(self, config):
         self.config = config
         self.device = config['evaluation']['device'] if torch.cuda.is_available() else "cpu"
-        print(f"🔧 Initialized STT Evaluator on {self.device}")
+        print(f"Initialized STT Evaluator on {self.device}")
     
     def load_model(self, model_name):
         """Load a Whisper model and processor"""
@@ -79,13 +79,11 @@ class STTEvaluator:
         try:
             # Load dataset
             dataset = load_dataset(
-                dataset_config["name"], 
+                dataset_config["path"], 
                 split=dataset_config["split"],
                 trust_remote_code=True
             )
-            # ----------------------------------------------------------------------------------
-            dataset = dataset.select(range(100))
-            
+
             # Limit samples
             max_samples = self.config['evaluation']['max_samples']
             if len(dataset) > max_samples:
@@ -137,11 +135,11 @@ class STTEvaluator:
                 "total_processing_time": sum(processing_times)
             }
             
-            print(f"✅ {model_name}: WER={wer_score:.3f}, CER={cer_score:.3f}, Accuracy={accuracy:.3f}")
+            print(f"{model_name}: WER={wer_score:.3f}, CER={cer_score:.3f}, Accuracy={accuracy:.3f}")
             return result
             
         except Exception as e:
-            print(f"❌ Error evaluating {model_name}: {str(e)}")
+            print(f"Error evaluating {model_name}: {str(e)}")
             return None
     
     def evaluate_all_models(self):
@@ -150,7 +148,7 @@ class STTEvaluator:
         
         for dataset_name, dataset_config in self.config['datasets'].items():
             print(f"\n{'='*60}")
-            print(f"📊 DATASET: {dataset_name}")
+            print(f"DATASET: {dataset_name}")
             print(f"{'='*60}")
             
             for model_name in self.config['models']['baseline']:

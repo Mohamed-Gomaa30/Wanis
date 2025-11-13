@@ -1,8 +1,16 @@
-# import os
-from pathlib import Path
-import modal
+import yaml
 
-training_code_dir = Path(__file__).parent / "src/stt"
+config_path = "configs/stt_config.yaml"
+
+with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
 
 
-print(training_code_dir)
+print(config['datasets']['egyptian_asr'])
+
+
+
+dataset_name = "egyptian_asr"
+
+if dataset_name in config['datasets']: 
+    print(True)

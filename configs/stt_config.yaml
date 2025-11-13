@@ -4,17 +4,22 @@ models:
     - "openai/whisper-tiny"
     - "openai/whisper-small"
     - "openai/whisper-medium"
+    - "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
+    - "speechbrain/asr-wav2vec2-commonvoice-14-ar"
+    - "omarxadel/hubert-large-arabic-egyptian"
 
 datasets:
   egyptian_asr:
-    name: "MightyStudent/Egyptian-ASR-MGB-3"
+    name: "Egyptian ASR MGB-3"
+    path: "MightyStudent/Egyptian-ASR-MGB-3"
     split: "train"
     audio_col: "audio"
     text_col: "sentence"
     test_split: "test" 
 
   arabic_egy:
-    name: "MAdel121/arabic-egy-cleaned"
+    name: "Arabic Egyptian Cleaned"
+    path: "MAdel121/arabic-egy-cleaned"
     split: "train"
     audio_col: "audio"
     text_col: "text"
@@ -38,4 +43,4 @@ training:
 evaluation:
   metrics: ["wer", "cer", "accuracy"]
   device: "cuda"
-  max_samples: 1000
+  max_samples: 10

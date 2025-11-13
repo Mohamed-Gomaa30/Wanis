@@ -1,46 +1,96 @@
-# import os
-from pathlib import Path
 import modal
+from pathlib import Path
+import argparse
 
 training_code_dir = Path(__file__).parent / "src/stt"
 configs_dir = Path(__file__).parent / "configs"
 
-print(training_code_dir)
-
-image = (modal.Image.debian_slim(python_version="3.10").pip_install(
-    "torch==2.8",
-    "torchcodec==0.7", 
-    "transformers==4.26.1",
-    "datasets",
-    "librosa", 
-    "evaluate==0.4.0",
-    "jiwer==2.5.1",
-    "numpy==1.24.3",
-    "pandas==2.0.3",   
-    "tqdm==4.65.0",
-    "pyyaml==6.0",
-    "soundfile")
+image = (modal.Image.debian_slim(python_version="3.10")
+    .pip_install(
+        "torch==2.8",
+        "torchaudio==2.8",
+        "transformers==4.26.1",
+        "datasets",
+        "librosa", 
+        "soundfile",
+        "evaluate==0.4.0",
+        "jiwer==2.5.1",
+        "numpy==1.24.3",
+        "pandas==2.0.3",   
+        "tqdm==4.65.0",
+        "pyyaml==6.0",
+        "soundfile==0.12.0",
+        "peft"
+    )
     .add_local_dir(training_code_dir, remote_path="/root/stt")
     .add_local_dir(configs_dir, remote_path="/root/configs")
 )
-app = modal.App(
-    "stt", 
-    image=image
-)
+
+app = modal.App("stt", image=image)
 
 @app.function(
-    gpu="t4",
+    # gpu="t4",
     timeout=3600,
-    # volumes={"/results": volume},
 )
-def run_stt_baseline_evaluation():
-    import subprocess
-    subprocess.run(["python", "stt/run_stt_baseline.py"])
+def evaluate_model(model_name: str, dataset_name: str):
+    """Run STT evaluation on Modal - direct function call"""
+    import yaml
+    import os
+    import pandas as pd
+    from stt.baseline_evaluation import STTEvaluator
+    
+    # Load config
+    config_path = '/root/configs/stt_config.yaml'
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
+    
+    # Initialize evaluator
+    evaluator = STTEvaluator(config)
+    
+    print(f"Starting Evaluation - Model: {model_name}, Dataset: {dataset_name}")
 
+    # Get dataset config
+    if dataset_name not in config['datasets']:
+    
+        available_datasets = list(config['datasets'].keys())
+        raise ValueError(f"Dataset '{dataset_name}' not found in config. Available datasets: {available_datasets}")
+    
+    dataset_config = config['datasets'][dataset_name]
+    
+    print("before Evaluation -----------------------------")
+    # Run evaluation
+    result = evaluator.evaluate_model_dataset(model_name, dataset_config)
+    print("After Evaluation -----------------------------")
+
+    
+    # Save results
+    output_dir = '/root/results'
+    os.makedirs(output_dir, exist_ok=True)
+    
+    if result:
+        results_df = pd.DataFrame([result])
+        safe_model_name = model_name.replace("/", "_")
+        results_path = os.path.join(output_dir, f'stt_evaluation_{safe_model_name}_{dataset_name}.csv')
+        results_df.to_csv(results_path, index=False)
+        
+        print(f"\nEvaluation completed! Results saved to: {results_path}")
+        print("\nResults:")
+        for key, value in result.items():
+            print(f"{key}: {value}")
+        
+        return result
+    else:
+        print("Evaluation failed!")
+        return None
+
+# For backward compatibility with argument parsing
 @app.local_entrypoint()
-def main():
-    # if config.runtime == "runc":
-    #     assert os.environ["MODAL_FUNCTION_RUNTIME"] == "runc"
-    # else:
-    #     assert "MODAL_FUNCTION_RUNTIME" not in os.environ
-    run_stt_baseline_evaluation.remote()
+def main(model: str="openai/whisper-tiny", datset: str="egyptian_asr"):
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--model", type=str, default="openai/whisper-tiny")
+    # parser.add_argument("--dataset", type=str, default="egyptian_asr")
+    
+    # args = parser.parse_args()
+
+    print("before")
+    evaluate_model.remote("openai/whisper-tiny", "egyptian_asr")
