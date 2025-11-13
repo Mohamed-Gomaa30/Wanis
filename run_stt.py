@@ -39,17 +39,14 @@ def evaluate_model(model_name: str, dataset_name: str):
     import pandas as pd
     from stt.baseline_evaluation import STTEvaluator
     
-    # Load config
     config_path = '/root/configs/stt_config.yaml'
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
-    # Initialize evaluator
     evaluator = STTEvaluator(config)
     
     print(f"Starting Evaluation - Model: {model_name}, Dataset: {dataset_name}")
 
-    # Get dataset config
     if dataset_name not in config['datasets']:
     
         available_datasets = list(config['datasets'].keys())
@@ -57,13 +54,9 @@ def evaluate_model(model_name: str, dataset_name: str):
     
     dataset_config = config['datasets'][dataset_name]
     
-    print("before Evaluation -----------------------------")
-    # Run evaluation
     result = evaluator.evaluate_model_dataset(model_name, dataset_config)
-    print("After Evaluation -----------------------------")
 
     
-    # Save results
     output_dir = '/root/results'
     os.makedirs(output_dir, exist_ok=True)
     
@@ -83,7 +76,6 @@ def evaluate_model(model_name: str, dataset_name: str):
         print("Evaluation failed!")
         return None
 
-# For backward compatibility with argument parsing
 @app.local_entrypoint()
 def main(model: str="openai/whisper-tiny", datset: str="egyptian_asr"):
     # parser = argparse.ArgumentParser()
@@ -94,3 +86,5 @@ def main(model: str="openai/whisper-tiny", datset: str="egyptian_asr"):
 
     print("before")
     evaluate_model.remote("openai/whisper-tiny", "egyptian_asr")
+
+    print("Hello")
