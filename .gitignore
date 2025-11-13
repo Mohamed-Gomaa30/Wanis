@@ -1,14 +1,7 @@
-.venv/
-venv/
-env/
 __pycache__/
 **/__pycache__/
-*.py[cod]
-*.so
-*.egg-info/
 
 # Ignore Jupyter and notebook outputs
-ipynb_checkpoints/
 notebooks/
 
 # Project-specific ignores
@@ -17,13 +10,6 @@ documents/
 # Ignore built data and results
 data/
 results/
-
-# Ignore local IDE/editor files
-.vscode/
-.idea/
-
-# Ignore model/training caches
-cache/
 
 # Ignore source subpackages not to push
 src/llm/

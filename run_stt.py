@@ -84,7 +84,4 @@ def main(model: str="openai/whisper-tiny", datset: str="egyptian_asr"):
     
     # args = parser.parse_args()
 
-    print("before")
     evaluate_model.remote("openai/whisper-tiny", "egyptian_asr")
-
-    print("Hello")

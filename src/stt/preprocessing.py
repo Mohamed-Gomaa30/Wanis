@@ -13,15 +13,12 @@ def normalize_arabic_text(text):
     if not text or not isinstance(text, str):
         return ""
     
-    # Remove punctuation
     punctuation = r'[!\"#$%&\'()*+,-./:;<=>?@[\\\\]^_`{|}~،؛؟]'
     text = re.sub(punctuation, '', text)
 
-    # Remove diacritics (tashkeel)
     diacritics = r'[\u064B-\u0652]'
     text = re.sub(diacritics, '', text)
     
-    # Normalize Arabic characters
     text = re.sub('پ', 'ب', text)
     text = re.sub('ڤ', 'ف', text)
     text = re.sub(r'[آ]', 'ا', text)
@@ -30,7 +27,6 @@ def normalize_arabic_text(text):
     text = re.sub(r'[ئ]', 'ي', text)
     text = re.sub(r'[ء]', '', text)
 
-    # Convert Eastern to Western Arabic numerals
     eastern_to_western_numerals = {
         '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', 
         '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
@@ -38,7 +34,6 @@ def normalize_arabic_text(text):
     for eastern, western in eastern_to_western_numerals.items():
         text = text.replace(eastern, western)
 
-    # Remove extra whitespace and normalize spaces
     text = re.sub(r'\s+', ' ', text).strip()
     
     return text
@@ -57,7 +52,6 @@ def preprocess_audio(audio_array, sampling_rate, target_sampling_rate=16000):
     """
     import numpy as np
     
-    # Resample if necessary
     if sampling_rate != target_sampling_rate:
         from scipy import signal
         audio_array = signal.resample(
@@ -65,7 +59,6 @@ def preprocess_audio(audio_array, sampling_rate, target_sampling_rate=16000):
             int(len(audio_array) * target_sampling_rate / sampling_rate)
         )
     
-    # Normalize audio to [-1, 1] if not already
     if audio_array.dtype != np.float32:
         audio_array = audio_array.astype(np.float32) / np.iinfo(audio_array.dtype).max
     

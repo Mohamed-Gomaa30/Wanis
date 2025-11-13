@@ -34,7 +34,6 @@ class STTFineTuner:
                 dataset_config['name'], 
                 split=dataset_config['split']
             )
-            # Preprocess audio and text
             dataset = dataset.map(self._preprocess_function, batched=True)
             datasets[dataset_name] = dataset
             
@@ -42,7 +41,7 @@ class STTFineTuner:
     
     def _preprocess_function(self, batch):
         """Preprocess audio and text for training"""
-        # Load and resample audio
+
         audio = batch[self.config['datasets']['egyptian_asr']['audio_col']]
         batch["input_features"] = self.processor(
             audio["array"], 
@@ -50,7 +49,6 @@ class STTFineTuner:
             return_tensors="pt"
         ).input_features[0]
         
-        # Normalize text
         batch["labels"] = self.processor.tokenizer(
             normalize_arabic_text(batch[self.config['datasets']['egyptian_asr']['text_col']])
         ).input_ids
@@ -59,7 +57,7 @@ class STTFineTuner:
     
     def fine_tune_model(self, base_model: str, output_dir: str):
         """Fine-tune a Whisper model"""
-        # Load model and processor
+
         self.processor = WhisperProcessor.from_pretrained(base_model, language="arabic", task="transcribe")
         model = WhisperForConditionalGeneration.from_pretrained(base_model)
         

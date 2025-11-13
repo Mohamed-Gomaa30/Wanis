@@ -2,49 +2,58 @@
 Script to run STT baseline evaluation
 """
 
-import sys
 import os
 import yaml
 import pandas as pd
-
-
+import argparse
 from stt.baseline_evaluation import STTEvaluator
 
-
-def main(model_name: str, dataset_name:str, mode:str):
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, required=True, help="Model name")
+    parser.add_argument("--dataset", type=str, required=True, help="Dataset name") 
+    parser.add_argument("--mode", type=str, default="evaluate", help="Run mode")
+    
+    args = parser.parse_args()
+    
+    # Load config
     config_path = '/root/configs/stt_config.yaml'
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
+    # Initialize evaluator
     evaluator = STTEvaluator(config)
     
-    print(f"Starting Evaluate: {model_name}\t Dataset: {dataset_name}")
-    # results_model 
-    result = evaluator.evaluate_model_dataset(model_name, config['datasets'])
+    print(f"Starting Evaluation - Model: {args.model}, Dataset: {args.dataset}")
     
+    # Get dataset config
+    if args.dataset not in config['datasets']:
+        raise ValueError(f"Dataset {args.dataset} not found in config. Available: {list(config['datasets'].keys())}")
     
+    dataset_config = config['datasets'][args.dataset]
+    
+    # Run evaluation
+    result = evaluator.evaluate_model_dataset(args.model, dataset_config)
+    
+    # Save results
     output_dir = '/root/results'
     os.makedirs(output_dir, exist_ok=True)
-    results_path = os.path.join(output_dir, 'stt_baseline_results.csv')
-    print(f"\nEvaluation completed! Results saved to: {results_path}")
-    print("\nSummary:")
-    print(result[['model', 'dataset', 'wer', 'cer', 'accuracy']].to_string(index=False))
-
-
-
-    # print("Starting STT Baseline Evaluation...")
-    # results_df = evaluator.evaluate_all_models()
-
     
-    
-    # output_dir = '/root/results'
-    # os.makedirs(output_dir, exist_ok=True)
-    # results_path = os.path.join(output_dir, 'stt_baseline_results.csv')
-    # results_df.to_csv(results_path, index=False)
-    
-    # print(f"\nEvaluation completed! Results saved to: {results_path}")
-    # print("\nSummary:")
-    # print(results_df[['model', 'dataset', 'wer', 'cer', 'accuracy']].to_string(index=False))
+    if result:
+        results_df = pd.DataFrame([result])
+        results_path = os.path.join(output_dir, f'stt_evaluation_{args.model.replace("/", "_")}_{args.dataset}.csv')
+        results_df.to_csv(results_path, index=False)
+        
+        print(f"\nEvaluation completed! Results saved to: {results_path}")
+        print("\nResults:")
+        print(f"Model: {result['model']}")
+        print(f"Dataset: {result['dataset']}")
+        print(f"WER: {result['wer']:.3f}")
+        print(f"CER: {result['cer']:.3f}")
+        print(f"Accuracy: {result['accuracy']:.3f}")
+        print(f"Samples tested: {result['samples_tested']}")
+    else:
+        print("Evaluation failed!")
 
 if __name__ == "__main__":
     main()
