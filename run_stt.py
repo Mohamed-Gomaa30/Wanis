@@ -5,10 +5,12 @@ training_code_dir = Path(__file__).parent / "src/stt"
 configs_dir = Path(__file__).parent / "configs"
 
 image = (modal.Image.debian_slim(python_version="3.10")
+    .uv_pip_install("nemo_toolkit[all]")
     .pip_install(
-        "torch==2.8",
-        "torchaudio==2.8",
-        "transformers==4.26.1",
+        "torch==2.9",
+        "torchcodec==0.8", 
+        # "torchaudio==2.8",
+        "transformers>=4.41.0",
         "datasets",
         "librosa", 
         "soundfile",
@@ -18,7 +20,7 @@ image = (modal.Image.debian_slim(python_version="3.10")
         "pandas==2.0.3",   
         "tqdm==4.65.0",
         "pyyaml==6.0",
-        "soundfile==0.12.0",
+        # "soundfile==0.12.0",
         "peft"
     )
     .add_local_dir(training_code_dir, remote_path="/root/stt")
@@ -27,6 +29,9 @@ image = (modal.Image.debian_slim(python_version="3.10")
 
 app = modal.App("stt", image=image)
 
+
+
+# Evaluation :) 
 @app.function(
     # gpu="t4",
     timeout=3600,
@@ -85,13 +90,3 @@ def evaluate_model(*arglist):
     else:
         print("Evaluation failed!")
         return None
-
-# @app.local_entrypoint()
-# def main():
-#     # parser = argparse.ArgumentParser()
-#     # parser.add_argument("--model", type=str, default="openai/whisper-tiny")
-#     # parser.add_argument("--dataset", type=str, default="egyptian_asr")
-    
-#     # args = parser.parse_args()
-
-#     evaluate_model.remote("openai/whisper-tiny","egyptian_asr")
