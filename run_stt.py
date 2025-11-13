@@ -1,6 +1,5 @@
 import modal
 from pathlib import Path
-import argparse
 
 training_code_dir = Path(__file__).parent / "src/stt"
 configs_dir = Path(__file__).parent / "configs"
@@ -32,12 +31,23 @@ app = modal.App("stt", image=image)
     # gpu="t4",
     timeout=3600,
 )
-def evaluate_model(model_name: str, dataset_name: str):
+def evaluate_model(*arglist):
     """Run STT evaluation on Modal - direct function call"""
+
+    import argparse
     import yaml
     import os
     import pandas as pd
     from stt.baseline_evaluation import STTEvaluator
+
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str)
+    parser.add_argument("--dataset", type=str)
+    args = parser.parse_args(args = arglist)
+
+    model_name = args.model
+    dataset_name = args.dataset
     
     config_path = '/root/configs/stt_config.yaml'
     with open(config_path, 'r') as f:
@@ -76,12 +86,12 @@ def evaluate_model(model_name: str, dataset_name: str):
         print("Evaluation failed!")
         return None
 
-@app.local_entrypoint()
-def main(model: str="openai/whisper-tiny", datset: str="egyptian_asr"):
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--model", type=str, default="openai/whisper-tiny")
-    # parser.add_argument("--dataset", type=str, default="egyptian_asr")
+# @app.local_entrypoint()
+# def main():
+#     # parser = argparse.ArgumentParser()
+#     # parser.add_argument("--model", type=str, default="openai/whisper-tiny")
+#     # parser.add_argument("--dataset", type=str, default="egyptian_asr")
     
-    # args = parser.parse_args()
+#     # args = parser.parse_args()
 
-    evaluate_model.remote("openai/whisper-tiny", "egyptian_asr")
+#     evaluate_model.remote("openai/whisper-tiny","egyptian_asr")
