@@ -3,7 +3,6 @@ import pandas as pd
 from datasets import load_dataset
 from transformers import WhisperProcessor, WhisperForConditionalGeneration
 import nemo.collections.asr as nemo_asr 
-# from evaluate import load
 from jiwer import wer, cer
 
 from tqdm import tqdm
@@ -112,15 +111,12 @@ class STTEvaluator:
     
     def preprocess_audio(self, audio_array, sampling_rate, target_sr=16000):
         """Preprocess audio for ASR models"""
-        # Convert to float32 if needed
         if audio_array.dtype != np.float32:
             audio_array = audio_array.astype(np.float32)
         
-        # Normalize audio
         if np.max(np.abs(audio_array)) > 0:
             audio_array = audio_array / np.max(np.abs(audio_array))
         
-        # Resample if needed
         if sampling_rate != target_sr:
             audio_array = librosa.resample(
                 y=audio_array,
@@ -133,22 +129,20 @@ class STTEvaluator:
     
     def evaluate_model_dataset(self, model_name, dataset_config):
         """Evaluate a single model on a single dataset"""
-        print(f"\nEvaluating {model_name} on {dataset_config['name']}")
         
-        # Load model
+        print(f"\nEvaluating {model_name} on {dataset_config['name']}")
+
         model_info = self.load_model(model_name)
         if model_info is None:
             return None
         
         try:
-            # Load dataset
             dataset = load_dataset(
                 dataset_config["path"], 
                 split=dataset_config["split"],
                 trust_remote_code=True
             )
 
-            # Limit samples
             max_samples = self.config['evaluation']['max_samples']
             if max_samples is not None and len(dataset) > max_samples:
                 dataset = dataset.select(range(max_samples))
@@ -157,7 +151,6 @@ class STTEvaluator:
             predictions = []
             processing_times = []
             
-            # Process each sample
             for sample in tqdm(dataset, desc=f"Processing {model_name.split('/')[-1]}"):
                 audio = sample[dataset_config["audio_col"]]
                 reference_text = sample[dataset_config["text_col"]]
@@ -165,14 +158,11 @@ class STTEvaluator:
                 import time
                 start_time = time.time()
                 
-                # Get audio data
                 audio_array = audio['array']
                 sampling_rate = audio["sampling_rate"]
                 
-                # Preprocess audio
                 audio_array, sampling_rate = self.preprocess_audio(audio_array, sampling_rate)
                 
-                # Transcribe based on model type
                 transcription = ""
                 if model_info["type"] == "whisper":
                     transcription = self.transcribe_audio_whisper(
@@ -191,16 +181,11 @@ class STTEvaluator:
                 processing_time = time.time() - start_time
                 processing_times.append(processing_time)
                 
-                # Apply normalization
                 normalized_reference = normalize_arabic_text(reference_text)
                 normalized_prediction = normalize_arabic_text(transcription)
                 
                 references.append(normalized_reference)
                 predictions.append(normalized_prediction)
-            
-            # Calculate metrics
-            # wer_metric = load("wer")
-            # cer_metric = load("cer")
             
             wer_score = wer(references, predictions)
             cer_score = cer(references, predictions)
