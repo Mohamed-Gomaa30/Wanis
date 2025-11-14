@@ -1,10 +1,10 @@
 import torch
 import pandas as pd
 from datasets import load_dataset
-from transformers import WhisperProcessor, WhisperForConditionalGeneration
-import nemo.collections.asr as nemo_asr 
+from transformers import WhisperProcessor, WhisperForConditionalGeneration # torch==2.9 torchcodec==0.8 
+from speechbrain.pretrained import EncoderASR  # torch==2.8 torchcodec==0.7
+import nemo.collections.asr as nemo_asr # torch==2.9 torchcodec==0.8
 from jiwer import wer, cer
-
 from tqdm import tqdm
 import warnings
 import numpy as np
@@ -18,6 +18,7 @@ from .preprocessing import normalize_arabic_text
 class STTEvaluator:
     """
     Evaluate ASR models on Egyptian Arabic datasets
+    Supports Whisper, NeMo, and SpeechBrain models
     """
     
     def __init__(self, config):
@@ -26,7 +27,7 @@ class STTEvaluator:
         print(f"Initialized STT Evaluator on {self.device}")
     
     def load_model(self, model_name):
-        """Load a Whisper or NeMo model"""
+        """Load a Whisper, NeMo, or SpeechBrain model"""
         print(f"Loading {model_name}...")
         try:
             if model_name.startswith("openai/"): 
@@ -40,8 +41,16 @@ class STTEvaluator:
             elif model_name.startswith("nvidia/"):
                 # Load NeMo model
                 asr_model = nemo_asr.models.ASRModel.from_pretrained(model_name) 
+                asr_model = asr_model.to(self.device)
                 asr_model.eval()
                 return {"type": "nemo", "model": asr_model}
+            
+            elif model_name.startswith("speechbrain/"): 
+                # Load SpeechBrain model
+                speechbrain_model = EncoderASR.from_hparams(model_name)
+                speechbrain_model = speechbrain_model.to(self.device)
+                speechbrain_model.eval()
+                return {"type": "speechbrain", "model": speechbrain_model}
             else:
                 print(f"Unsupported model type: {model_name}")
                 return None
@@ -87,7 +96,6 @@ class STTEvaluator:
     def transcribe_audio_nemo(self, model, audio_array, sampling_rate):
         """Transcribe a single audio sample using NeMo"""
         try:
-            # Resample to 16kHz if needed (NeMo typically expects 16kHz)
             if sampling_rate != 16000:
                 audio_array = librosa.resample(
                     y=audio_array, 
@@ -107,6 +115,47 @@ class STTEvaluator:
                 
         except Exception as e:
             print(f"NeMo transcription error: {e}")
+            return ""
+    
+    def transcribe_audio_speechbrain(self, model, audio_array, sampling_rate):
+        """Transcribe a single audio sample using SpeechBrain"""
+        try:
+            # Convert to torch tensor
+            if isinstance(audio_array, np.ndarray):
+                audio_tensor = torch.from_numpy(audio_array)
+            else:
+                audio_tensor = torch.FloatTensor(audio_array)
+            
+            # Ensure float32
+            audio_tensor = audio_tensor.float()
+            
+            # Handle stereo audio (take first channel)
+            if audio_tensor.dim() == 2:
+                audio_tensor = audio_tensor[0]
+            
+            # Remove any extra dimensions
+            audio_tensor = audio_tensor.squeeze()
+            
+            # Create batch with single sample
+            wavs_batch = audio_tensor.unsqueeze(0)  # [1, time]
+            wav_lens = torch.tensor([1.0], dtype=torch.float32)  # Relative length
+            
+            # Move to device
+            if self.device == "cuda":
+                wavs_batch = wavs_batch.cuda()
+                wav_lens = wav_lens.cuda()
+            
+            # Transcribe
+            with torch.no_grad():
+                transcriptions = model.transcribe_batch(wavs_batch, wav_lens)[0]
+            
+            if transcriptions:
+                return transcriptions[0]
+            else:
+                return ""
+                
+        except Exception as e:
+            print(f"SpeechBrain transcription error: {e}")
             return ""
     
     def preprocess_audio(self, audio_array, sampling_rate, target_sr=16000):
@@ -129,7 +178,6 @@ class STTEvaluator:
     
     def evaluate_model_dataset(self, model_name, dataset_config):
         """Evaluate a single model on a single dataset"""
-        
         print(f"\nEvaluating {model_name} on {dataset_config['name']}")
 
         model_info = self.load_model(model_name)
@@ -173,6 +221,12 @@ class STTEvaluator:
                     )
                 elif model_info["type"] == "nemo":
                     transcription = self.transcribe_audio_nemo(
+                        model_info["model"],
+                        audio_array,
+                        sampling_rate
+                    )
+                elif model_info["type"] == "speechbrain":
+                    transcription = self.transcribe_audio_speechbrain(
                         model_info["model"],
                         audio_array,
                         sampling_rate
