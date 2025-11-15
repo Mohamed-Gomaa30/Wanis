@@ -92,8 +92,8 @@ data:
   min_duration_in_seconds: 0.5
   
   # Dataset sizing
-  num_train_samples: 1000  # Reduced from 5000
-  num_eval_samples: 159    # Reduced from 1000
+  num_train_samples: 100  
+  num_eval_samples: 20   
   
   # Processing settings
   preprocessing_num_workers: 1
