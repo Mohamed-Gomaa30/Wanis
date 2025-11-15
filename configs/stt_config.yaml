@@ -1,5 +1,14 @@
-# STT Configuration
+# whisper_finetune_advanced.yaml
+# Advanced configuration for multi-model fine-tuning
+
+# Model configurations
 models:
+  language: "arabic"
+  task: "transcribe"
+  apply_spec_augment: false
+  freeze_encoder: false
+  freeze_feature_encoder: false
+
   baseline:
     - "openai/whisper-tiny"
     - "openai/whisper-small"
@@ -7,7 +16,27 @@ models:
     - "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
     - "speechbrain/asr-wav2vec2-commonvoice-14-ar"
     - "omarxadel/hubert-large-arabic-egyptian"
+  # baseline:
+  #   whisper_tiny: 
+  #     name: "openai/whisper-tiny"
+  #     type: "whisper"
+  #   whisper_small:
+  #     name: "openai/whisper-small" 
+  #     type: "whisper"
+  #   whisper_medium:
+  #     name: "openai/whisper-medium"
+  #     type: "whisper"
+  #   nvidia_conformer:
+  #     name: "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
+  #     type: "conformer"
+  #   speechbrain_wav2vec2:
+  #     name: "speechbrain/asr-wav2vec2-commonvoice-14-ar"
+  #     type: "wav2vec2"
+  #   hubert_arabic:
+  #     name: "omarxadel/hubert-large-arabic-egyptian"
+  #     type: "hubert"
 
+# Dataset configurations
 datasets:
   egyptian_asr:
     name: "Egyptian ASR MGB-3"
@@ -15,7 +44,9 @@ datasets:
     split: "train"
     audio_col: "audio"
     text_col: "sentence"
-    test_split: "test" 
+    test_split: "test"
+    language: "arabic"
+    dialect: "egyptian"
 
   arabic_egy:
     name: "Arabic Egyptian Cleaned"
@@ -24,23 +55,79 @@ datasets:
     audio_col: "audio"
     text_col: "text"
     test_split: "test"
+    language: "arabic"
+    dialect: "egyptian"
 
+# Training hyperparameters
 training:
-  use_lora: true
-  lora_r: 16
-  lora_alpha: 32
-  target_modules: ["q_proj", "v_proj"]
-  lora_dropout: 0.1
+  # Basic training parameters
+  num_train_epochs: 3
   batch_size: 8
   gradient_accumulation_steps: 2
-  learning_rate: 1e-4
+  learning_rate: 0.00001
   warmup_steps: 500
-  max_steps: 5000
+  max_steps: 4000
+  
+  # Evaluation and checkpointing
+  eval_strategy: "steps"
   eval_steps: 500
-  save_steps: 1000
+  save_steps: 500
   logging_steps: 100
+  save_total_limit: 2
+  
+  # Performance optimization
+  fp16: true
+  group_by_length: true
+  gradient_checkpointing: true
+  
+  # Generation settings
+  predict_with_generate: true
+  generation_max_length: 225
+  generation_num_beams: 1
 
+# Data preprocessing settings
+data:
+  # Audio filtering
+  max_duration_in_seconds: 30.0
+  min_duration_in_seconds: 0.5
+  
+  # Dataset sizing
+  num_train_samples: 1000  # Reduced from 5000
+  num_eval_samples: 159    # Reduced from 1000
+  
+  # Processing settings
+  preprocessing_num_workers: 1
+  do_lower_case: false
+  
+  # Audio processing
+  sampling_rate: 16000
+  return_attention_mask: true
+
+# Evaluation configuration
 evaluation:
+  # Metrics to compute
   metrics: ["wer", "cer", "accuracy"]
+  
+  # Hardware settings
   device: "cuda"
-  max_samples: 10
+  
+  # Evaluation limits
+  max_samples: 1000
+  batch_size: 16
+  
+  # Output settings
+  save_predictions: true
+  output_dir: "./evaluation_results"
+
+# Output configuration
+output:
+  base_dir: "./fine_tuned_models"
+  save_format: ["pytorch", "safetensors"]
+  push_to_hub: false
+  hub_model_id: "your-username/whisper-arabic-egyptian"
+
+# Experiment tracking
+logging:
+  report_to: "tensorboard"
+  logging_dir: "./logs"
+  experiment_name: "arabic_asr_baseline_comparison"
