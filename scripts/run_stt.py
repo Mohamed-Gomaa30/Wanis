@@ -1,14 +1,15 @@
+import os
 import modal
 from pathlib import Path
 
-
 training_code_dir = Path(__file__).parent.parent / "src/stt"
-fine_tuning_code_dir = Path(__file__).parent.parent / "src/stt/fine-tuning"
+fine_tuning_code_dir = Path(__file__).parent.parent / "src/stt/train"
 configs_dir = Path(__file__).parent.parent / "configs"
+congig_env = Path(__file__).parent.parent / ".env" # .env path 
 
 # Create separate images for different model types due to dependency conflicts
 whisper_nemo_image = (
-    modal.Image.debian_slim(python_version="3.12")
+    modal.Image.debian_slim(python_version="3.10")
     # .uv_pip_install("nemo_toolkit[all]")
     .pip_install(
         # "torch==2.9",
@@ -24,23 +25,28 @@ whisper_nemo_image = (
         # "tqdm==4.65.0",
         # "pyyaml==6.0",
         # "peft"
+        "ipywidgets", 
+        "transformers>=4.52.0", 
         "accelerate==1.8.1",
         "datasets==3.6.0",
         "evaluate==0.4.5",
-        "fastapi[standard]==0.116.1",
-        "huggingface-hub==0.36.0",
         "jiwer==4.0.0",
         "librosa==0.11.0",
         "torch==2.8.0",
         "torchcodec==0.7",
         "torchaudio==2.8.0",
         "transformers==4.52.0",
-        "whisper_normalizer==0.1.12"
-    )
+        "whisper_normalizer==0.1.12", 
+        "python-dotenv"
+    ).uv_pip_install("huggingface_hub")
+    .pip_install("huggingface_hub")
     .add_local_dir(training_code_dir, remote_path="/root/stt")
-    .add_local_dir(fine_tuning_code_dir, remote_path="/root/stt/fine-tuning")  # Fixed path
+    .add_local_dir(fine_tuning_code_dir, remote_path="/root/stt/fine-tuning")
     .add_local_dir(configs_dir, remote_path="/root/configs")
+    .add_local_file(congig_env, "/root/") # .env file 
+    
 )
+
 
 # speechbrain_image = (
 #     modal.Image.debian_slim(python_version="3.10")
@@ -63,7 +69,7 @@ app = modal.App("stt")
 
 # Evaluation functions
 @app.function(image=whisper_nemo_image,
-            # gpu="t4",
+            gpu="t4",
             timeout=3600)
 def evaluate_model(*arglist):
     """Run STT evaluation on Modal"""
@@ -117,7 +123,8 @@ def evaluate_model(*arglist):
 
 # Fine-tuning functions 
 @app.function(image=whisper_nemo_image,
-            # gpu="a100",
+            secrets=[modal.Secret.from_dotenv(Path(__file__).parent)], 
+            gpu="A10",
             timeout=14400)
 def fine_tune_whisper(*arglist):
     """Fine-tune Whisper models"""
@@ -126,7 +133,8 @@ def fine_tune_whisper(*arglist):
     import os
     import sys
     
-    sys.path.insert(0, '/root/stt/fine-tuning')
+    
+    sys.path.insert(0, '/root/stt/train')
     from whisper_fine_tuning import WhisperFineTuner  
 
     parser = argparse.ArgumentParser()
@@ -161,7 +169,7 @@ def fine_tune_nemo(*arglist):
     import os
     import sys
     
-    sys.path.insert(0, '/root/stt/fine-tuning')
+    sys.path.insert(0, '/root/stt/train')
     from nemo_fine_tuning import NeMoFineTuner  
 
     parser = argparse.ArgumentParser()

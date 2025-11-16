@@ -2,8 +2,8 @@ import torch
 import pandas as pd
 from datasets import load_dataset
 from transformers import WhisperProcessor, WhisperForConditionalGeneration # torch==2.9 torchcodec==0.8 
-from speechbrain.pretrained import EncoderASR  # torch==2.8 torchcodec==0.7
-import nemo.collections.asr as nemo_asr # torch==2.9 torchcodec==0.8
+# from speechbrain.pretrained import EncoderASR  # torch==2.8 torchcodec==0.7
+# import nemo.collections.asr as nemo_asr # torch==2.9 torchcodec==0.8
 from jiwer import wer, cer
 from tqdm import tqdm
 import warnings
@@ -12,7 +12,7 @@ import librosa
 
 warnings.filterwarnings('ignore')
 
-from .preprocessing import normalize_arabic_text
+from stt.preprocessing import normalize_arabic_text
 
 
 class STTEvaluator:
@@ -62,14 +62,12 @@ class STTEvaluator:
     def transcribe_audio_whisper(self, processor, model, audio_array, sampling_rate):
         """Transcribe a single audio sample using Whisper"""
         try:
-            # Process audio
             inputs = processor(
                 audio_array, 
                 sampling_rate=sampling_rate, 
                 return_tensors="pt"
             ).to(self.device)
             
-            # Generate transcription with Arabic language forcing
             forced_decoder_ids = processor.get_decoder_prompt_ids(
                 language="arabic", 
                 task="transcribe"
@@ -104,7 +102,6 @@ class STTEvaluator:
                 )
                 sampling_rate = 16000
             
-            # NeMo's transcribe method expects a list of audio arrays
             with torch.no_grad():
                 transcriptions = model.transcribe([audio_array])
             
@@ -120,32 +117,25 @@ class STTEvaluator:
     def transcribe_audio_speechbrain(self, model, audio_array, sampling_rate):
         """Transcribe a single audio sample using SpeechBrain"""
         try:
-            # Convert to torch tensor
             if isinstance(audio_array, np.ndarray):
                 audio_tensor = torch.from_numpy(audio_array)
             else:
                 audio_tensor = torch.FloatTensor(audio_array)
             
-            # Ensure float32
             audio_tensor = audio_tensor.float()
             
-            # Handle stereo audio (take first channel)
             if audio_tensor.dim() == 2:
                 audio_tensor = audio_tensor[0]
             
-            # Remove any extra dimensions
             audio_tensor = audio_tensor.squeeze()
             
-            # Create batch with single sample
             wavs_batch = audio_tensor.unsqueeze(0)  # [1, time]
             wav_lens = torch.tensor([1.0], dtype=torch.float32)  # Relative length
             
-            # Move to device
             if self.device == "cuda":
                 wavs_batch = wavs_batch.cuda()
                 wav_lens = wav_lens.cuda()
             
-            # Transcribe
             with torch.no_grad():
                 transcriptions = model.transcribe_batch(wavs_batch, wav_lens)[0]
             
@@ -187,7 +177,7 @@ class STTEvaluator:
         try:
             dataset = load_dataset(
                 dataset_config["path"], 
-                split=dataset_config["split"],
+                split=dataset_config["test_split"],
                 trust_remote_code=True
             )
 

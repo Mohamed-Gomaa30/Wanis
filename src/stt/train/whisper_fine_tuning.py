@@ -1,26 +1,31 @@
 """
 Whisper Fine-tuning Script
 """
-
-import functools
 import os
-from pathlib import Path
-import evaluate
 import torch
+import logging
+import evaluate
+import datasets
+import functools
+import transformers
+from pathlib import Path
+from dotenv import load_dotenv
 from dataclasses import dataclass
 from typing import Any, Dict, List, Union
-import datasets
-import transformers
 from transformers import AutoProcessor
-import yaml
-import logging
+from huggingface_hub import create_repo
+from stt.baseline_evaluation import normalize_arabic_text
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+dotenv_path = Path(__file__).parent.parent.parent.parent / ".env" # root/.env 
+print(dotenv_path)
+load_dotenv(dotenv_path)
 
-from stt.baseline_evaluation import normalize_arabic_text
+HF_Token = os.environ.get("HUGGINGFACE_HUB_TOKEN")
+HF_UserName = os.environ.get("HF_USER_NAME")
 
 
 @dataclass
@@ -39,8 +44,6 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     def __call__(
         self, features: List[Dict[str, Union[List[int], torch.Tensor]]]
     ) -> Dict[str, torch.Tensor]:
-        # split inputs and labels since they have to be of different lengths and need
-        # different padding methods
         model_input_name = self.processor.model_input_names[0]
         input_features = [
             {model_input_name: feature[model_input_name]} for feature in features
@@ -60,13 +63,10 @@ class DataCollatorSpeechSeq2SeqWithPadding:
             label_features, return_tensors="pt"
         )
         
-        # replace padding with -100 to ignore loss correctly
         labels = labels_batch["input_ids"].masked_fill(
             labels_batch.attention_mask.ne(1), -100
         )
         
-        # if bos token is appended in previous tokenization step,
-        # cut bos token here as it's append later anyways
         if (labels[:, 0] == self.decoder_start_token_id).all().cpu().item():
             labels = labels[:, 1:]
         
@@ -79,14 +79,11 @@ def compute_metrics(pred, tokenizer, metric):
     pred_ids = pred.predictions
     label_ids = pred.label_ids
     
-    # replace -100 with the pad_token_id
     label_ids[label_ids == -100] = tokenizer.pad_token_id
     
-    # decode predictions and labels
     pred_str = tokenizer.batch_decode(pred_ids, skip_special_tokens=True)
     label_str = tokenizer.batch_decode(label_ids, skip_special_tokens=True)
 
-    # Normalize text
     pred_str = [normalize_arabic_text(pred) for pred in pred_str]
     label_str = [normalize_arabic_text(label) for label in label_str]
 
@@ -98,6 +95,18 @@ def compute_metrics(pred, tokenizer, metric):
     
     return {"wer": wer, "cer": cer}
     
+def create_model_repo(repo_id: str): 
+    """
+    args: 
+        repo: repo path 
+    return: 
+        created repo 
+    """
+    try: 
+        create_repo(repo_id, token = HF_Token, private=True, exist_ok=True)
+        print(f"Repository created/verified: {repo_id}")        
+    except Exception as ex: 
+        print(f"Failed to create repo: {ex}")
 
 class WhisperFineTuner:
     def __init__(self, config): 
@@ -121,16 +130,14 @@ class WhisperFineTuner:
     
     def fine_tune_model(self, base_model: str, dataset_name: str, output_dir: str):
         """Main fine-tuning method compatible with Modal app"""
-        self.model_name = base_model
-        self.dataset_name = dataset_name
+        model_name = base_model
+        dataset_name = dataset_name
         
-        # Get configs
         dataset_config = self._get_dataset_config(dataset_name)
         models_config = self.config.get('models', {})
         training_config = self.config.get('training', {})
         data_config = self.config.get('data', {})
         
-        # Setup output directory
         output_path = Path(output_dir)
         
         print("=" * 80)
@@ -153,8 +160,17 @@ class WhisperFineTuner:
         save_total_limit = training_config.get('save_total_limit', 2)
         generation_max_length = training_config.get('generation_max_length', 225)
         
+
+        # Generate repository name: modelName_datasetName
+        model_name = base_model.split('/')[-1]
+        repo_id = f"{HF_UserName}/{model_name}_{dataset_name}"
+
+        create_model_repo(repo_id)
         training_args = transformers.Seq2SeqTrainingArguments(
-            output_dir=output_path.as_posix(),
+            push_to_hub=True,
+            hub_private_repo=True, 
+            output_dir=repo_id,
+            hub_token = HF_Token, 
             num_train_epochs=num_train_epochs,
             per_device_train_batch_size=batch_size,
             per_device_eval_batch_size=batch_size,
@@ -193,37 +209,30 @@ class WhisperFineTuner:
         
         print("\n2. Load pretrained model, tokenizer, and feature extractor")
         
-        # Load config
         model_config = transformers.AutoConfig.from_pretrained(base_model)
         
-        # Update config with settings
         model_config.update({
             "apply_spec_augment": models_config.get('apply_spec_augment', False),
             "forced_decoder_ids": None,
             "suppress_tokens": [],
         })
         
-        # Load feature extractor
         feature_extractor = transformers.WhisperFeatureExtractor.from_pretrained(base_model)
         
-        # Get language from YAML
         language = models_config.get('language', 'arabic')
         
-        # Load tokenizer
         tokenizer = transformers.WhisperTokenizer.from_pretrained(
             base_model,
             language=language,
             task=models_config.get('task', 'transcribe'),
         )
         
-        # Load model
         model = transformers.WhisperForConditionalGeneration.from_pretrained(
             base_model,
             config=model_config,
         )
         model.config.use_cache = False
         
-        # Apply freezing if requested
         if models_config.get('freeze_feature_encoder', False):
             if hasattr(model, 'freeze_feature_encoder'):
                 model.freeze_feature_encoder()
@@ -244,11 +253,9 @@ class WhisperFineTuner:
         
         print("\n3. Load and prepare dataset")
         
-        # Get data parameters from YAML
         num_train_samples = data_config.get('num_train_samples', 5000)
         num_eval_samples = data_config.get('num_eval_samples', 1000)
         
-        # Load dataset
         print(f"Loading dataset: {dataset_config['path']}")
         full_train_dataset = datasets.load_dataset(
             dataset_config['path'],
@@ -258,13 +265,11 @@ class WhisperFineTuner:
         
         print(f"Dataset loaded. Total samples: {len(full_train_dataset)}")
         
-        # Select subsets
         total_samples_needed = num_train_samples + num_eval_samples
         subset_dataset = full_train_dataset.select(
             range(min(total_samples_needed, len(full_train_dataset)))
         )
         
-        # Split into train and eval
         train_dataset = subset_dataset.select(range(num_train_samples))
         eval_dataset = subset_dataset.select(
             range(num_train_samples, min(total_samples_needed, len(subset_dataset)))
@@ -304,7 +309,6 @@ class WhisperFineTuner:
         min_input_length = min_duration * feature_extractor.sampling_rate
         model_input_name = feature_extractor.model_input_names[0]
         
-        # Determine if we need to forward attention mask for SpecAugment
         forward_attention_mask = (
             models_config.get('apply_spec_augment', False)
         )
@@ -313,7 +317,6 @@ class WhisperFineTuner:
         
         def prepare_dataset(batch):
             """Prepare dataset by extracting features and tokenizing."""
-            # Process audio
             sample = batch[audio_col]
             inputs = feature_extractor(
                 sample["array"],
@@ -321,25 +324,21 @@ class WhisperFineTuner:
                 return_attention_mask=forward_attention_mask,
             )
             
-            # Process audio length
             batch[model_input_name] = inputs.get(model_input_name)[0]
             batch["input_length"] = len(sample["array"])
             
             if forward_attention_mask:
                 batch["attention_mask"] = inputs.get("attention_mask")[0]
             
-            # Process targets with text normalization
             input_str = batch[text_col]
             if data_config.get('do_lower_case', False):
                 input_str = input_str.lower()
             
-            # Apply Arabic text normalization
             normalized_text = normalize_arabic_text(input_str)
             batch["labels"] = tokenizer(normalized_text).input_ids
             
             return batch
         
-        # Map preprocessing function
         num_workers = data_config.get('preprocessing_num_workers', 1)
         vectorized_datasets = raw_datasets.map(
             prepare_dataset,
@@ -348,7 +347,6 @@ class WhisperFineTuner:
             desc="Preprocessing dataset",
         )
         
-        # Filter by audio length
         def is_audio_in_length_range(length):
             return min_input_length < length < max_input_length
         
@@ -362,7 +360,6 @@ class WhisperFineTuner:
         print(f"  Train samples: {len(vectorized_datasets['train'])}")
         print(f"  Eval samples: {len(vectorized_datasets['eval'])}")
         
-        # Check if we have enough samples after filtering
         if len(vectorized_datasets['train']) == 0:
             raise ValueError(
                 "No training samples left after filtering! "
@@ -377,13 +374,11 @@ class WhisperFineTuner:
         
         print("\n6. Create processor and data collator")
         
-        # Save components to output dir for processor creation
         output_path.mkdir(parents=True, exist_ok=True)
         feature_extractor.save_pretrained(output_path)
         tokenizer.save_pretrained(output_path)
         model_config.save_pretrained(output_path)
         
-        # Create processor
         try:
             processor = AutoProcessor.from_pretrained(output_path)
             print("Processor created successfully")
@@ -391,7 +386,6 @@ class WhisperFineTuner:
             processor = feature_extractor
             print("Using feature extractor as processor")
         
-        # Create data collator
         data_collator = DataCollatorSpeechSeq2SeqWithPadding(
             processor=processor,
             decoder_start_token_id=model.config.decoder_start_token_id,
@@ -428,14 +422,29 @@ class WhisperFineTuner:
         
         train_result = trainer.train()
         
-        # Save model
         print("Saving model...")
-        trainer.save_model()
-        
-        # Save processor components
-        feature_extractor.save_pretrained(output_path)
-        tokenizer.save_pretrained(output_path)
-        
+        # trainer.save_model()
+
+        trainer.push_to_hub()
+        # try: 
+        #     from huggingface_hub import create_repo
+        #     create_repo(repo_id, token = HF_Token, private=True, exist_ok=True)
+        #     print(f"Repository created/verified: {repo_id}")
+            
+        #     # Push model
+        #     trainer.push_to_hub()
+
+        #         # repo_id = "MohamedGomaa30/whisper-tiny_egyptian_asr",
+        #         # commit_message=f"Fine-tuned {base_model} on {dataset_name}",
+        #         # token = HF_Token
+            
+
+            
+        #     print(f"Successfully pushed to Huggingface repo {repo_id}")
+        # except Exception as ex: 
+        #     print(f"Failed to push to Hugging Face Hub:: {ex}")
+
+
         print("\n10. Running final evaluation")
         
         if training_args.do_eval and vectorized_datasets["eval"] is not None:
