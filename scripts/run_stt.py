@@ -69,7 +69,7 @@ app = modal.App("stt")
 
 # Evaluation functions
 @app.function(image=whisper_nemo_image,
-            gpu="t4",
+            # gpu="t4",
             timeout=3600)
 def evaluate_model(*arglist):
     """Run STT evaluation on Modal"""

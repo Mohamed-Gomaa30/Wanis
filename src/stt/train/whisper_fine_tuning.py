@@ -159,6 +159,10 @@ class WhisperFineTuner:
         logging_steps = training_config.get('logging_steps', 100)
         save_total_limit = training_config.get('save_total_limit', 2)
         generation_max_length = training_config.get('generation_max_length', 225)
+
+        # push to hub config 
+        push_to_hub = training_config.push_to_hub 
+        hub_private_repo = training_config.hub_private_repo 
         
 
         # Generate repository name: modelName_datasetName
@@ -167,8 +171,8 @@ class WhisperFineTuner:
 
         create_model_repo(repo_id)
         training_args = transformers.Seq2SeqTrainingArguments(
-            push_to_hub=True,
-            hub_private_repo=True, 
+            push_to_hub=push_to_hub,
+            hub_private_repo=hub_private_repo, 
             output_dir=repo_id,
             hub_token = HF_Token, 
             num_train_epochs=num_train_epochs,
@@ -426,24 +430,6 @@ class WhisperFineTuner:
         # trainer.save_model()
 
         trainer.push_to_hub()
-        # try: 
-        #     from huggingface_hub import create_repo
-        #     create_repo(repo_id, token = HF_Token, private=True, exist_ok=True)
-        #     print(f"Repository created/verified: {repo_id}")
-            
-        #     # Push model
-        #     trainer.push_to_hub()
-
-        #         # repo_id = "MohamedGomaa30/whisper-tiny_egyptian_asr",
-        #         # commit_message=f"Fine-tuned {base_model} on {dataset_name}",
-        #         # token = HF_Token
-            
-
-            
-        #     print(f"Successfully pushed to Huggingface repo {repo_id}")
-        # except Exception as ex: 
-        #     print(f"Failed to push to Hugging Face Hub:: {ex}")
-
 
         print("\n10. Running final evaluation")
         

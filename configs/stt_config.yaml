@@ -40,7 +40,7 @@ models:
 datasets:
   egyptian_asr:
     name: "Egyptian ASR MGB-3"
-    path: "MohamedGomaa30/Egyptian-ASR-MGB-3"  # Your pre-split dataset
+    path: "MohamedGomaa30/Egyptian-ASR-MGB-3"
     train_split: "train"
     eval_split: "eval"  
     test_split: "test"
@@ -78,7 +78,7 @@ training:
   save_total_limit: 2
   
   # Performance optimization
-  fp16: true
+  fp16: false
   group_by_length: true
   gradient_checkpointing: true
   
@@ -86,6 +86,10 @@ training:
   predict_with_generate: true
   generation_max_length: 225
   generation_num_beams: 1
+
+  # push to hub settings
+  push_to_hub: True
+  hub_private_repo: True
 
 # Data preprocessing settings
 data:
