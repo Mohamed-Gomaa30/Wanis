@@ -40,33 +40,35 @@ models:
 datasets:
   egyptian_asr:
     name: "Egyptian ASR MGB-3"
-    path: "MightyStudent/Egyptian-ASR-MGB-3"
-    split: "train"
+    path: "MohamedGomaa30/Egyptian-ASR-MGB-3"  # Your pre-split dataset
+    train_split: "train"
+    eval_split: "eval"  
+    test_split: "test"
     audio_col: "audio"
     text_col: "sentence"
-    test_split: "test"
     language: "arabic"
     dialect: "egyptian"
 
   arabic_egy:
     name: "Arabic Egyptian Cleaned"
     path: "MAdel121/arabic-egy-cleaned"
-    split: "train"
+    train_split: "train"
+    eval_split: "validation"
+    test_split: "test"
     audio_col: "audio"
     text_col: "text"
-    test_split: "test"
     language: "arabic"
     dialect: "egyptian"
 
 # Training hyperparameters
 training:
   # Basic training parameters
-  num_train_epochs: 3
+  num_train_epochs: 1
   batch_size: 8
   gradient_accumulation_steps: 2
   learning_rate: 0.00001
   warmup_steps: 500
-  max_steps: 4000
+  max_steps: 10
   
   # Evaluation and checkpointing
   eval_strategy: "steps"
@@ -123,7 +125,7 @@ evaluation:
 output:
   base_dir: "./fine_tuned_models"
   save_format: ["pytorch", "safetensors"]
-  push_to_hub: false
+  push_to_hub: Ture
   hub_model_id: "your-username/whisper-arabic-egyptian"
 
 # Experiment tracking
