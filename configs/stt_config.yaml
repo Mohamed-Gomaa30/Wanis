@@ -1,4 +1,4 @@
-# whisper_finetune_advanced.yaml
+# Speech-to-Text.yaml
 # Advanced configuration for multi-model fine-tuning
 
 # Model configurations
@@ -13,6 +13,7 @@ models:
     - "openai/whisper-tiny"
     - "openai/whisper-small"
     - "openai/whisper-medium"
+    - "openai/whisper-large"
     - "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"
     - "speechbrain/asr-wav2vec2-commonvoice-14-ar"
     - "omarxadel/hubert-large-arabic-egyptian"
@@ -63,24 +64,30 @@ datasets:
 # Training hyperparameters
 training:
   # Basic training parameters
-  num_train_epochs: 1
-  batch_size: 8
-  gradient_accumulation_steps: 2
+  num_train_epochs: 3 #  for (arabic_egy, A100) , 3 for (egyptian_asr,t4)
+  batch_size: 32 # for (arabic_egy, A100) , 8 for (egyptian_asr,t4)
+  gradient_accumulation_steps: 1 # for (arabic_egy, A100) , 2 for (egyptian_asr,t4)
   learning_rate: 0.00001
-  warmup_steps: 500
-  max_steps: 10
+  warmup_steps: 1000 # for (arabic_egy, A100) , 500 for (egyptian_asr,t4)
+  max_steps: -1
   
   # Evaluation and checkpointing
-  eval_strategy: "steps"
-  eval_steps: 500
-  save_steps: 500
-  logging_steps: 100
+  eval_strategy: "epoch"
+  save_strategy: "epoch" 
+  
+  eval_steps: none 
+  save_steps: none
+ 
+  logging_steps: 50 # for (arabic_egy, A100) , 100 for (egyptian_asr,t4)
   save_total_limit: 2
   
   # Performance optimization
-  fp16: false
+  fp16: false # for (arabic_egy, A100) , true  for (egyptian_asr,t4)
+  bf16: true # for (arabic_egy, A100) , false  for (egyptian_as
+  tf32: true # for (arabic_egy, A100) , false  for (egyptian_asr,t4)
+ 
   group_by_length: true
-  gradient_checkpointing: true
+  gradient_checkpointing: false # for (arabic_egy, A100) , true  for (egyptian_asr,t4)
   
   # Generation settings
   predict_with_generate: true
@@ -98,11 +105,11 @@ data:
   min_duration_in_seconds: 0.5
   
   # Dataset sizing
-  num_train_samples: 100  
-  num_eval_samples: 20   
+  num_train_samples: null  
+  num_eval_samples: null   
   
   # Processing settings
-  preprocessing_num_workers: 1
+  preprocessing_num_workers: 16 # for (arabic_egy, A100) , 1 for (egyptian_asr,t4)
   do_lower_case: false
   
   # Audio processing
@@ -118,7 +125,8 @@ evaluation:
   device: "cuda"
   
   # Evaluation limits
-  max_samples: 1000
+  do_samples: none 
+  max_samples: 500 
   batch_size: 16
   
   # Output settings
