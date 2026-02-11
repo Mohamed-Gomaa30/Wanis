@@ -10,44 +10,39 @@ congig_env = Path(__file__).parent.parent / ".env" # .env path
 # Create separate images for different model types due to dependency conflicts
 whisper_nemo_image = (
     modal.Image.debian_slim(python_version="3.10")
-    # .uv_pip_install("nemo_toolkit[all]")
+    # 1. Install required system packages
+    .apt_install("libsndfile1", "ffmpeg") 
     .pip_install(
-        # "torch==2.9",
-        # "torchcodec==0.8", 
-        # "transformers==4.26.1", 
-        # "datasets",
-        # "librosa", 
-        # "soundfile",
-        # "evaluate==0.4.0",
-        # "jiwer==2.5.1",
-        # "numpy==1.24.3",
-        # "pandas==2.0.3",   
-        # "tqdm==4.65.0",
-        # "pyyaml==6.0",
-        # "peft"
-        "ipywidgets", 
-        "transformers>=4.52.0", 
-        "accelerate==1.8.1",
-        "datasets==3.6.0",
-        "evaluate==0.4.5",
-        "jiwer==4.0.0",
-        "librosa==0.11.0",
+        # Standard Python packages
+        "python-dotenv", 
+        "datasets",
+        "evaluate",
+        "jiwer",
+        "librosa",
+        "soundfile", 
+        "whisper_normalizer==0.1.12",
+        
+        # PyTorch dependencies (use compatible versions)
         "torch==2.8.0",
-        "torchcodec==0.7",
-        "torchaudio==2.8.0",
-        "transformers==4.52.0",
-        "whisper_normalizer==0.1.12", 
-        "python-dotenv"
-    ).uv_pip_install("huggingface_hub")
-    .pip_install("huggingface_hub")
+        "torchcodec==0.7.0",
+        # Consider adding a specific torchaudio version if 2.8.0 requires one:
+        # "torchaudio==2.8.0", 
+    )
+    # 2. Install NeMo from GitHub with the '[all]' extras
+    # .pip_install(
+    #     "Cython",
+    #     # Use the git+URL format and append '#egg=nemo_toolkit[all]' 
+    #     # to install all collections (like nemo.collections.asr)
+    #     "git+https://github.com/NVIDIA/NeMo.git#egg=nemo_toolkit[all]" 
+    # )
+    # This is the line you must include/uncomment:
+    .pip_install("nemo_toolkit[all]")
     .add_local_dir(training_code_dir, remote_path="/root/stt")
     .add_local_dir(fine_tuning_code_dir, remote_path="/root/stt/fine-tuning")
     .add_local_dir(configs_dir, remote_path="/root/configs")
     .add_local_file(congig_env, "/root/") # .env file 
     
 )
-
-
 # speechbrain_image = (
 #     modal.Image.debian_slim(python_version="3.10")
 #     .pip_install(
@@ -69,8 +64,8 @@ app = modal.App("stt")
 
 # Evaluation functions
 @app.function(image=whisper_nemo_image,
-            # gpu="t4",
-            timeout=3600)
+            # gpu="A10",
+            timeout=3600*6)
 def evaluate_model(*arglist):
     """Run STT evaluation on Modal"""
     import argparse
@@ -120,11 +115,12 @@ def evaluate_model(*arglist):
     else:
         print("Evaluation failed!")
         return None
+    
 
 # Fine-tuning functions 
 @app.function(image=whisper_nemo_image,
             secrets=[modal.Secret.from_dotenv(Path(__file__).parent)], 
-            gpu="A10",
+            # gpu="A10",
             timeout=14400)
 def fine_tune_whisper(*arglist):
     """Fine-tune Whisper models"""
@@ -143,7 +139,7 @@ def fine_tune_whisper(*arglist):
     parser.add_argument("--output-dir", type=str, default="/root/fine_tuned_models")
     args = parser.parse_args(args=arglist)
 
-    config_path = '/root/configs/stt_config.yaml'
+    config_path = '/root/configs/asr_stt/nemo_config.yaml'
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
@@ -159,9 +155,13 @@ def fine_tune_whisper(*arglist):
     print(f"Fine-tuning completed! Model saved to: {result}")
     return result
 
-@app.function(image=whisper_nemo_image,
-            # gpu="a100",
-            timeout=14400)
+# Fine Tune Nemo 
+@app.function(
+    image=whisper_nemo_image,
+    gpu="t4",  
+    timeout=14400,
+    volumes={"/root/nemo_dataset": modal.Volume.from_name("nemo-manifests", create_if_missing=True)}
+)
 def fine_tune_nemo(*arglist):
     """Fine-tune NeMo models"""
     import argparse
@@ -169,30 +169,72 @@ def fine_tune_nemo(*arglist):
     import os
     import sys
     
-    sys.path.insert(0, '/root/stt/train')
-    from nemo_fine_tuning import NeMoFineTuner  
-
+    sys.path.insert(0, '/root/stt/train/nemo')
+    from nemo_finetuner import NeMoFineTuner  
+    
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--output-dir", type=str, default="/root/fine_tuned_models")
+    parser.add_argument("--force-recreate-manifests", action="store_true", 
+                       help="Force recreation of manifest files")
     args = parser.parse_args(args=arglist)
-
-    config_path = '/root/configs/stt_config.yaml'
+    
+    config_path = '/root/configs/asr_stt/nemo_config.yaml'
+    
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
     print(f"Fine-tuning {args.model} on {args.dataset}")
     
     fine_tuner = NeMoFineTuner(config)
+    
+    # Call fine_tune_model without train_manifest and val_manifest arguments
+    # The method will use paths from the config file
     result = fine_tuner.fine_tune_model(
         base_model=args.model,
         dataset_name=args.dataset,
-        output_dir=os.path.join(args.output_dir, f"{args.model.replace('/', '_')}_{args.dataset}")
+        output_dir=os.path.join(args.output_dir, f"{args.model.replace('/', '_')}_{args.dataset}"),
+        force_recreate_manifests=args.force_recreate_manifests
     )
     
     print(f"Fine-tuning completed! Model saved to: {result}")
     return result
+# @app.function(image=whisper_nemo_image_2,
+#             # gpu="t4",
+#             timeout=14400)
+# def fine_tune_nemo(*arglist):
+#     """Fine-tune NeMo models"""
+#     import argparse
+#     import yaml
+#     import os
+#     import sys
+    
+#     sys.path.insert(0, '/root/stt/train')
+#     from nemo_finetuner import NeMoFineTuner  
+
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument("--model", type=str, required=True)
+#     parser.add_argument("--dataset", type=str, required=True)
+#     parser.add_argument("--output-dir", type=str, default="/root/fine_tuned_models")
+#     args = parser.parse_args(args=arglist)
+
+#     config_path = '/root/configs/asr_stt/nemo_config.yaml'
+   
+#     with open(config_path, 'r') as f:
+#         config = yaml.safe_load(f)
+    
+#     print(f"Fine-tuning {args.model} on {args.dataset}")
+    
+#     fine_tuner = NeMoFineTuner(config)
+#     result = fine_tuner.fine_tune_model(
+#         base_model=args.model,
+#         dataset_name=args.dataset,
+#         output_dir=os.path.join(args.output_dir, f"{args.model.replace('/', '_')}_{args.dataset}")
+#     )
+    
+#     print(f"Fine-tuning completed! Model saved to: {result}")
+#     return result
 
 # @app.function(image=speechbrain_image,
 #             # gpu="a100",
