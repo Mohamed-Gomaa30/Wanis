@@ -3,7 +3,7 @@ import pandas as pd
 from datasets import load_dataset
 from transformers import WhisperProcessor, WhisperForConditionalGeneration # torch==2.9 torchcodec==0.8 
 # from speechbrain.pretrained import EncoderASR  # torch==2.8 torchcodec==0.7
-# import nemo.collections.asr as nemo_asr # torch==2.9 torchcodec==0.8
+import nemo.collections.asr as nemo_asr # torch==2.9 torchcodec==0.8
 from jiwer import wer, cer
 from tqdm import tqdm
 import warnings
@@ -181,9 +181,10 @@ class STTEvaluator:
                 trust_remote_code=True
             )
 
-            max_samples = self.config['evaluation']['max_samples']
-            if max_samples is not None and len(dataset) > max_samples:
-                dataset = dataset.select(range(max_samples))
+            # max_samples = self.config['evaluation']['max_samples']
+            # do_samples = self.config['evaluation']['do_samples']
+            # if do_samples and max_samples < len(dataset):
+            #     dataset = dataset.select(range(max_samples))                
             
             references = []
             predictions = []
