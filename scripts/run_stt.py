@@ -82,7 +82,7 @@ def evaluate_model(*arglist):
     model_name = args.model
     dataset_name = args.dataset
     
-    config_path = '/root/configs/stt_config.yaml'
+    config_path = '/root/configs/asr_stt/whisper_config.yaml'
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
@@ -130,8 +130,8 @@ def fine_tune_whisper(*arglist):
     import sys
     
     
-    sys.path.insert(0, '/root/stt/train')
-    from whisper_fine_tuning import WhisperFineTuner  
+    sys.path.insert(0, '/root/stt/fine-tuning')
+    from whisper_finetuner import WhisperFineTuner  
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True)
@@ -139,7 +139,7 @@ def fine_tune_whisper(*arglist):
     parser.add_argument("--output-dir", type=str, default="/root/fine_tuned_models")
     args = parser.parse_args(args=arglist)
 
-    config_path = '/root/configs/asr_stt/nemo_config.yaml'
+    config_path = '/root/configs/asr_stt/whisper_config.yaml'
     with open(config_path, 'r') as f:
         config = yaml.safe_load(f)
     
@@ -169,7 +169,7 @@ def fine_tune_nemo(*arglist):
     import os
     import sys
     
-    sys.path.insert(0, '/root/stt/train/nemo')
+    sys.path.insert(0, '/root/stt/fine-tuning/nemo')
     from nemo_finetuner import NeMoFineTuner  
     
     parser = argparse.ArgumentParser()
