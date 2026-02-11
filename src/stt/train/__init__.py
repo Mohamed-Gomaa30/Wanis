@@ -1,6 +1,6 @@
 # Fine-tuning modules
-from stt.stt_fine_tuning.fine_whisper_fine_tuning import WhisperFineTuner
-from stt.stt_fine_tuning.speechbrain_fine_tuning import SpeechBrainFineTuner
-from stt.stt_fine_tuning.nemo_fine_tuning import NeMoFineTuner
+from .whisper_finetuner import WhisperFineTuner
+from .speechbrain_finetuner import SpeechBrainFineTuner
+from .nemo.nemo_finetuner import NeMoFineTuner
 
 __all__ = ["WhisperFineTuner", "SpeechBrainFineTuner", "NeMoFineTuner"]
