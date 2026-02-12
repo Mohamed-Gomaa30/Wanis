@@ -5,7 +5,7 @@ __pycache__/
 **/__pycache__/
 
 # Ignore Jupyter and notebook outputs
-notebooks/
+# notebooks/
 
 # Project-specific ignores
 documents/
@@ -16,4 +16,4 @@ results/
 
 # Ignore source subpackages not to push
 src/llm/
-src/tts/
+
