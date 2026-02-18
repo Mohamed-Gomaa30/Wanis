@@ -87,13 +87,12 @@ async def initiate_emergency_comms() -> Dict[str, Any]:
 
 
 async def send_whatsapp_notification(message: str) -> Dict[str, Any]:
-    """Sends a WhatsApp notification to the user's registered contacts (family/doctor).
+    """Sends a WhatsApp notification to the doctor/family. 
+    MUST be called whenever the user says they are okay after a fall, 
+    or when status updates are needed for the medical team.
     
     Args:
-        message: The content of the message to send.
-        
-    Returns:
-        Confirmation string.
+        message: The detailed text message to send.
     """
     logger.info(f"Tool Call: send_whatsapp_notification('{message}')")
     success = await notification_service.send_whatsapp(message)
@@ -103,13 +102,12 @@ async def send_whatsapp_notification(message: str) -> Dict[str, Any]:
 
 
 async def send_telegram_notification(message: str) -> Dict[str, Any]:
-    """Sends a Telegram notification to the user's registered contacts (family/doctor).
+    """Sends a Telegram notification to the doctor/family. 
+    MUST be called whenever the user asks to inform the doctor they are okay, 
+    or when sending health vital results for review.
     
     Args:
-        message: The content of the message to send.
-        
-    Returns:
-        Confirmation string.
+        message: The status update message.
     """
     logger.info(f"Tool Call: send_telegram_notification('{message}')")
     success = await notification_service.send_telegram(message)
@@ -118,17 +116,68 @@ async def send_telegram_notification(message: str) -> Dict[str, Any]:
     return {"error": "Failed to send Telegram message."}
 
 
+async def upsert_dynamic_memory(fact: str, category: str = "general") -> Dict[str, Any]:
+    """Saves a significant fact or memory about the user to long-term memory.
+    
+    Use this when the user mentions something important for the first time or updates 
+    a known fact (e.g., mood, a new story, a change in daily plans).
+    
+    Args:
+        fact: The clear, concise fact to remember (e.g., "User is feeling sad today").
+        category: Category of the memory (e.g., "mood", "story", "visit").
+    """
+    try:
+        from ..core.memory import MemoryManager
+        import os
+        
+        # Initialize manager
+        profile_path = os.path.join(os.path.dirname(__file__), "../data/user_profile.json")
+        memory_manager = MemoryManager(profile_path)
+        
+        await memory_manager.dynamic.add_memory(fact, metadata={"category": category})
+        
+        return {"result": f"Memory saved: {fact}"}
+    except Exception as e:
+        logger.error(f"Failed to upsert memory: {e}")
+        return {"error": str(e)}
+
+
+async def search_long_term_memory(query: str) -> Dict[str, Any]:
+    """Searches the user's long-term memory for past facts, stories, or preferences.
+    
+    Use this when the user asks "do you remember?" or when you need context about 
+    something mentioned in the past that is not in the current conversation window.
+    
+    Args:
+        query: The specific topic or question to search for (e.g., "grandchildren names").
+    """
+    try:
+        from ..core.memory import MemoryManager
+        import os
+        
+        profile_path = os.path.join(os.path.dirname(__file__), "../data/user_profile.json")
+        memory_manager = MemoryManager(profile_path)
+        
+        results = await memory_manager.dynamic.search_memories(query)
+        
+        if not results:
+            return {"result": "No relevant memories found for this query."}
+            
+        return {"result": f"Found memories:\n{results}"}
+    except Exception as e:
+        logger.error(f"Failed to search memory: {e}")
+        return {"error": str(e)}
+
+
 # ── Tool Definitions for Gemini ─────────────────────────────────
 
 # List of tool functions to pass to Gemini
 TOOLS = [
-    fetch_vitals,
     search_web,
+    fetch_vitals,
     initiate_emergency_comms,
     send_whatsapp_notification,
-    send_telegram_notification
+    send_telegram_notification,
+    upsert_dynamic_memory,
+    search_long_term_memory
 ]
-
-
-
-print("Tools loaded successfully.")

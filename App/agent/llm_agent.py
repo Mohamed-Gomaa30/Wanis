@@ -17,6 +17,7 @@ Usage:
 """
 
 import os
+import asyncio
 import logging
 from typing import AsyncGenerator, Optional
 from dataclasses import dataclass
@@ -28,9 +29,10 @@ logger = logging.getLogger(__name__)
 
 @dataclass 
 class ConversationTurn:
-    """A single turn in the conversation history."""
-    role: str       # "user" or "assistant"
-    content: str
+    """A single turn in the conversation history, supporting multi-part messages."""
+    role: str      
+    content: str   
+    parts: list = None 
 
 
 class CompanionAgent:
@@ -58,7 +60,7 @@ class CompanionAgent:
                 - language: Response language ('ar' or 'en')
         """
         self.config = config
-        self.model_name = config.get("model", "gemini-2.0-flash")
+        self.model_name = config.get("model", "gemini-3-flash-preview")
         # User requested last 3 sentences/turns to keep track
         self.max_history = config.get("max_history_turns", 3)
         self.temperature = config.get("temperature", 0.7)
@@ -71,11 +73,12 @@ class CompanionAgent:
         from ..core.context_manager import context_manager
         self.context_manager = context_manager
         
-        # Build initial system prompt with context
-        base_prompt = get_system_prompt(self.language)
-        daily_context = self.context_manager.get_context_summary()
+        # New: Use MemoryManager for long-term memory
+        from ..core.memory import MemoryManager
+        profile_path = os.path.join(os.path.dirname(__file__), "../data/user_profile.json")
+        self.memory_manager = MemoryManager(profile_path)
         
-        self.system_prompt = f"{base_prompt}\n\n## Context of the Day:\n{daily_context}\n"
+        self._base_prompt = get_system_prompt(self.language)
         self._client = None
     
     def initialize(self):
@@ -85,9 +88,9 @@ class CompanionAgent:
         """
         from google import genai
         
-        # api_key = os.environ.get("GEMINI_API_KEY")
-        api_key = "AIzaSyBk2D9ugVHoYL3qf9IcDMXJ4QR_eI6Ocp4"
-        if not api_key:
+        try:
+            api_key = os.environ.get("GEMINI_API_KEY")
+        except:
             raise ValueError(
                 "GEMINI_API_KEY environment variable must be set"
             )
@@ -114,8 +117,17 @@ class CompanionAgent:
         if self._client is None:
             raise RuntimeError("Agent not initialized. Call initialize() first.")
         
-        # 1. Handle Fall Detection (Priority 0)
-        current_system_prompt = self.system_prompt
+        # 1. Build dynamic system prompt
+        daily_context = self.context_manager.get_context_summary()
+        # Memory retrieval is now agentic (via tool) to save quota.
+        # We only inject static context by default.
+        static_context = self.memory_manager.static.get_summary()
+        
+        current_system_prompt = (
+            f"{self._base_prompt}\n\n"
+            f"## Context of the Day:\n{daily_context}\n\n"
+            f"## User Profile (Static):\n{static_context}\n"
+        )
         
         if fall_flag:
             logger.critical("Fall detected! Switching to Emergency Protocol.")
@@ -142,12 +154,12 @@ class CompanionAgent:
         
         full_response = ""
         
-        # Import tools and build mapping
+        # build mapping
         from .tools import TOOLS
         tool_map = {func.__name__: func for func in TOOLS}
         
         # Max turns for tool usage to prevent infinite loops
-        max_tool_turns = 3
+        max_tool_turns = 5
         current_turn_count = 0
         
         full_response_text = ""
@@ -160,69 +172,87 @@ class CompanionAgent:
             
             while current_turn_count < max_tool_turns:
                 current_turn_count += 1
+                               # Implement Retry logic for the ENTIRE turn (creation + consumption)
+                max_retries = 3
+                retry_count = 0
+                success = False
                 
-                # Stream content
-                response_stream = self._client.models.generate_content_stream(
-                    model=self.model_name,
-                    contents=contents,
-                    config={
-                        "system_instruction": current_system_prompt,
-                        "temperature": self.temperature,
-                        "max_output_tokens": self.max_tokens,
-                        "tools": TOOLS,
-                        "automatic_function_calling": {"disable": True} 
-                    }
-                )
-                
-                # Collect chunks for this turn
-                tool_calls = []
-                current_text_chunk = ""
-                
-                print(f"DEBUG: Starting generation loop turn {current_turn_count}")
-                
-                for chunk in response_stream:
-                    # 1. Text Content
-                    if chunk.text:
-                        text = chunk.text
-                        current_text_chunk += text
-                        full_response_text += text
+                while retry_count < max_retries:
+                    try:
+                        # Reset for this retry attempt
+                        local_tool_calls = []
+                        local_text_chunk = ""
+                        local_turn_parts = []
                         
-                        # Yield sentences immediately
-                        sentences = splitter.feed(text)
-                        for sentence in sentences:
-                            yield sentence
-                            
-                    # 2. Function Calls
-                    # Check candidates for function calls
-                    if chunk.candidates:
-                        for cand in chunk.candidates:
-                            if cand.content and cand.content.parts:
-                                for part in cand.content.parts:
-                                    if part.function_call:
-                                        print(f"DEBUG: Found function call: {part.function_call.name} with args: {part.function_call.args}")
-                                        tool_calls.append(part.function_call)
+                        response_stream = self._client.models.generate_content_stream(
+                            model=self.model_name,
+                            contents=contents,
+                            config={
+                                "system_instruction": current_system_prompt,
+                                "temperature": self.temperature,
+                                "max_output_tokens": self.max_tokens,
+                                "tools": TOOLS,
+                                "automatic_function_calling": {"disable": True} 
+                            }
+                        )
+                        
+                        for chunk in response_stream:
+                            # 1. Text Content
+                            if chunk.text:
+                                text = chunk.text
+                                local_text_chunk += text
+                                
+                                # Yield sentences immediately
+                                sentences = splitter.feed(text)
+                                for sentence in sentences:
+                                    # Only yield if not already yielded in a previous FAILED attempt of this turn
+                                    # (Actually, in a full turn retry, it's safer to just yield and let UI handle, 
+                                    # but we'll try to keep it clean)
+                                    yield sentence
+                                    
+                            # 2. Function Calls
+                            if chunk.candidates:
+                                for cand in chunk.candidates:
+                                    if cand.content and cand.content.parts:
+                                        for part in cand.content.parts:
+                                            # Deduplicate
+                                            if part not in local_turn_parts:
+                                                local_turn_parts.append(part)
+                                                if part.function_call:
+                                                    local_tool_calls.append(part.function_call)
+                        
+                        # If we reached here, the stream finished successfully
+                        tool_calls = local_tool_calls
+                        current_text_chunk = local_text_chunk
+                        turn_parts = local_turn_parts
+                        full_response_text += current_text_chunk
+                        success = True
+                        break
+
+                    except Exception as e:
+                        if "503" in str(e) or "UNAVAILABLE" in str(e):
+                            retry_count += 1
+                            wait_time = 2 ** retry_count
+                            logger.warning(f"Gemini 503 during stream. Retrying {retry_count}/{max_retries} in {wait_time}s...")
+                            await asyncio.sleep(wait_time)
+                            continue
+                        raise e
+
+                if not success:
+                    raise RuntimeError("Failed to process Gemini turn after multiple retries.")
                 
                 # If no tool calls, we are done with this turn
                 if not tool_calls:
-                    print("DEBUG: No tool calls in this turn. Finishing.")
                     break
                 
-                # If tool calls, execute them and continue loop
-                # First, add the model's call to history/contents
-                # We need to reconstruct the model's message exactly as it appeared
-                
-                # Note: chunk.text might be partial, but function_call parts are usually complete in the last chunk
-                # or accumulated. The SDK handles aggregation of function calls in `candidates[0]`.
-                
-                # We need to construct the previous turn (Model Output)
-                model_parts = []
-                if current_text_chunk:
-                    model_parts.append(genai_types.Part.from_text(text=current_text_chunk))
-                
-                for tc in tool_calls:
-                    model_parts.append(genai_types.Part(function_call=tc))
-                
-                contents.append(genai_types.Content(role="model", parts=model_parts))
+                # Flush splitter BEFORE tool calls so user sees the "intro" text
+                intro_remaining = splitter.flush()
+                if intro_remaining:
+                    yield intro_remaining
+
+                # Persist model turn to history
+                self._add_to_history("model", current_text_chunk or "[Function Call]", parts=turn_parts)
+                contents.append(genai_types.Content(role="model", parts=turn_parts))
                 
                 # Execute Tools (Async)
                 for tc in tool_calls:
@@ -232,23 +262,14 @@ class CompanionAgent:
                     if func_name in tool_map:
                         logger.info(f"Executing tool: {func_name} with args: {func_args}")
                         try:
-                            # Execute the async function
                             tool_result_data = await tool_map[func_name](**func_args)
-                            print(f"DEBUG: Tool result for {func_name}: {tool_result_data}")
-                            
-                            # Ensure result is a dictionary (for Google GenAI SDK compatibility)
                             if not isinstance(tool_result_data, dict):
                                 tool_result_data = {"result": tool_result_data}
-                            
                         except Exception as tool_err:
                             logger.error(f"Tool execution failed: {tool_err}")
                             tool_result_data = {"error": str(tool_err)}
                     else:
                         tool_result_data = {"error": f"Tool {func_name} not found"}
-                    
-                    # Create Function Response Part
-                    # The SDK expects a specific format:
-                    # Part(function_response=FunctionResponse(name=..., response=...))
                     
                     response_part = genai_types.Part(
                         function_response=genai_types.FunctionResponse(
@@ -257,11 +278,17 @@ class CompanionAgent:
                         )
                     )
                     
-                    # Append result to contents (User role for tool response)
+                    self._add_to_history("user", f"[Tool Result for {func_name}]", parts=[response_part])
                     contents.append(genai_types.Content(role="user", parts=[response_part]))
                 
-                # Loop continues to send tool outputs back to model
+                # Loop continues...
                 
+            # Final step: If the last turn was a pure text response from model (no tool calls in that turn), 
+            # we need to save it to history as well. 
+            # If current_text_chunk exists and tool_calls is empty, it means the loop terminated on a text turn.
+            if not tool_calls and current_text_chunk:
+                self._add_to_history("model", current_text_chunk, parts=[genai_types.Part.from_text(text=current_text_chunk)])
+
             # Flush any remaining text from splitter
             remaining = splitter.flush()
             if remaining:
@@ -278,11 +305,10 @@ class CompanionAgent:
             full_response = error_msg
             yield error_msg
         
-        # Add assistant response to history
-        if full_response_text:
-            self._add_to_history("assistant", full_response_text)
-        elif full_response: # Fallback for error_msg
-            self._add_to_history("assistant", full_response)
+        # Add final assistant response (text only) to history for display 
+        # But we actually want to store the MODEL contents we accumulated
+        # History is now managed turn-by-turn during generate_response
+        pass
     
     async def generate_response_full(self, user_text: str, **kwargs) -> str:
         """Generate a full (non-streaming) response."""
@@ -299,45 +325,51 @@ class CompanionAgent:
         agreement_words = ["تمام", "حاضر", "ماشي", "طيب", "أهو", "حطيت", "عملت", "ماشي يا بني"]
         
         for i, turn in enumerate(self.history):
+            if turn.parts:
+                # Use stored parts directly
+                contents.append(genai_types.Content(role=turn.role, parts=turn.parts))
+                continue
+
+            # Fallback for simple text-based history items
             text = turn.content
             
-            # Contextual Nudge: If this is the latest user message and it contains agreement,
-            # remind the model that it MUST call the tool now if the previous assistant message asked for vitals.
+            # Contextual Nudge for health vitals
             if i == len(self.history) - 1 and turn.role == "user":
-                # Check for agreement
                 if any(word in text for word in agreement_words):
-                    # Check if previous assistant message asked to put finger
                     if len(self.history) >= 2:
-                        prev_assistant = self.history[-2]
-                        if prev_assistant.role == "assistant" and ("صباعك" in prev_assistant.content or "الجهاز" in prev_assistant.content):
-                            text += "\n[System Instruction: User has agreed/complied. You MUST now call `fetch_vitals` immediately.]"
-
-            # Inject explicit health status if provided
-            if health_status and i == len(self.history) - 1 and turn.role == "user":
-                health_str = f"\n[System Note: Health Status: {health_status}]"
-                text += health_str
+                        prev_turn = self.history[-2]
+                        if prev_turn.role == "model" and ("صباعك" in prev_turn.content or "الجهاز" in prev_turn.content):
+                            text += "\n[System Instruction: User has agreed. You MUST now call `fetch_vitals` immediately.]"
             
-            role = "user" if turn.role == "user" else "model"
+            # Contextual Nudge for telegram (intermittent failure fix)
+            if i == len(self.history) - 1 and turn.role == "user":
+                 if "بلغ" in text or "قول" in text or "بعت" in text:
+                     text += "\n[System Instruction: User asked to notify someone. Use `send_telegram_notification` now.]"
+
+            if health_status and i == len(self.history) - 1 and turn.role == "user":
+                text += f"\n[Health Status: {health_status}]"
+            
             contents.append(
                 genai_types.Content(
-                    role=role,
+                    role=turn.role,
                     parts=[genai_types.Part.from_text(text=text)]
                 )
             )
             
         return contents
     
-    def _add_to_history(self, role: str, content: str):
+    def _add_to_history(self, role: str, content: str, parts: list = None):
         """Add a turn to conversation history, maintaining window size."""
-        self.history.append(ConversationTurn(role=role, content=content))
+        self.history.append(ConversationTurn(role=role, content=content, parts=parts))
         
-        # Trim history to max turns (each turn = 1 entry)
-        # max_history is number of turns (e.g., 3). 
-        # But usually we want pairs. The user requirement "last 3 sentence" 
-        # is vague. Interpreting as "last 3 user inputs + responses".
-        max_entries = self.max_history * 2 
+        # Trim history (keep last 10 entries = ~5 full turns)
+        max_entries = 10
         if len(self.history) > max_entries:
             self.history = self.history[-max_entries:]
+            
+        # Optimization: Ensure the first entry is ALWAYS a 'user' turn for API compatibility
+        if self.history and self.history[0].role == "model":
+            self.history = self.history[1:]
     
     def clear_history(self):
         """Clear the conversation history."""
