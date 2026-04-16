@@ -15,6 +15,9 @@ let audioWorklet = null;
 let audioWorkletNode = null;
 let analyser = null;
 let animationId = null;
+import { vad, processFloat32 } from './js/vad.js';
+import { startChunk, addChunk, getPayload } from './js/audio_chunker.js';
+import './js/vad_ui.js'; // ensures UI listener registration
 let ws = null;
 
 function setStatus(text) {
