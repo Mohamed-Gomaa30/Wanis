@@ -1,5 +1,7 @@
 # Wanis: Arabic Speech-to-Speech Companion for the Elderly
 
+[![CI](https://github.com/your-org/wanis/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/wanis/actions/workflows/ci.yml)
+
 **Quick start:** After cloning, create and activate the Conda environment:
 ```bash
 conda create -n wanis-env python=3.10 -y

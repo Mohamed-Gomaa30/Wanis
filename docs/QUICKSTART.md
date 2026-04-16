@@ -544,4 +544,27 @@ Use this checklist to verify your installation:
 
 ## License
 
+## Deploy on Lightning.ai
+
+### Prerequisites
+- Component definition file `component.yaml` at repository root.
+- CI workflow `.github/workflows/ci.yml` for automated builds.
+- Deployment script `deploy_lightning.sh`.
+
+### Steps
+1. Ensure you have a Lightning.ai account and the CLI installed.
+2. Run the deployment script:
+   ```bash
+   ./deploy_lightning.sh
+   ```
+3. After the script reports success, verify the component appears in your Lightning.ai dashboard.
+4. Use the CI badge in `README.md` to monitor build status.
+
+### Verification
+- The script should exit with code 0.
+- The component should be listed under *Components* in the Lightning.ai console.
+- CI workflow should show a green check on GitHub.
+
+## License
+
 This project is licensed under the MIT License. See [LICENSE](../LICENSE) for details.
