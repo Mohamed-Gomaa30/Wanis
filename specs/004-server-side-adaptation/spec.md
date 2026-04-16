@@ -45,6 +45,9 @@ Implement server-side adaptations to support client‑side VAD segments, provide
 
 ## Clarifications
 
+### Session 2026-04-16
+- Q: What is the primary focus of Phase 4? → A: Production deployment on Lightning.ai (demo & deploy).
+
 ### 2026-04-16
 - Q: Which HTTP header indicates client‑side VAD activation? → A: Use `X-Client-VAD` header with values `true` or `false`.
 - Q: What is the error response JSON format for corrupted audio chunks? → A: `{ "error_code": 400, "message": "Corrupted audio chunk", "request_id": "<uuid>" }`.
@@ -76,3 +79,19 @@ Implement server-side adaptations to support client‑side VAD segments, provide
 - Existing LitServe implementation (`wanis/lightning.ai/voice_litserve.py`).
 - Silero VAD model (`wanis/voice/vad.py`).
 - Monitoring stack (Prometheus/Grafana) configured in deployment.
+
+## Phase 4 – Demo & Lightning.ai Deployment
+
+### Goals
+- Package the application as a Lightning.ai component.
+- Deploy a demo environment on Lightning.ai infrastructure.
+- Set up CI/CD pipelines to build and publish the component.
+- Provide monitoring dashboards and health checks in the Lightning.ai console.
+- Document a simple deployment guide for end‑users.
+
+### Deliverables
+- Lightning.ai component definition (`component.yaml`).
+- GitHub Actions workflow for CI/CD.
+- Deployment scripts (`deploy_lightning.sh`).
+- Updated documentation with a "Deploying on Lightning.ai" section.
+
