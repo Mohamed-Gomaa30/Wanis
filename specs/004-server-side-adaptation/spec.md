@@ -38,10 +38,16 @@ Implement server-side adaptations to support client‑side VAD segments, provide
 - NFR4: All logging must comply with GDPR‑compatible anonymization.
 
 ## Assumptions
-- Clients will include a `client_vad` flag in request headers when VAD is active.
+- Clients will include an `X-Client-VAD` header with values `true` (VAD enabled) or `false` (VAD disabled).
 - Audio is PCM 16‑bit, 16 kHz, mono.
 - Existing Silero VAD model is already loaded and can be reused for fallback.
 - Monitoring stack (Prometheus + Grafana) is available in the deployment environment.
+
+## Clarifications
+
+### 2026-04-16
+- Q: Which HTTP header indicates client‑side VAD activation? → A: Use `X-Client-VAD` header with values `true` or `false`.
+- Q: What is the error response JSON format for corrupted audio chunks? → A: `{ "error_code": 400, "message": "Corrupted audio chunk", "request_id": "<uuid>" }`.
 
 ## Success Criteria
 - 95 % of speech segments are processed with total latency ≤ 500 ms.
