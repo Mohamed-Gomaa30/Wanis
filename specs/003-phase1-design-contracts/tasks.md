@@ -4,10 +4,16 @@
 
 ## Tasks
 
+- [X] T013 Create Client‑Side VAD contract (`specs/003-phase1-design-contracts/contracts/vad-client-contract.md`)
+- [X] T014 Create Server‑Side STT contract (`specs/003-phase1-design-contracts/contracts/stt-server-contract.md`)
+- [X] T015 Create WebSocket fallback contract (`specs/003-phase1-design-contracts/contracts/websocket-fallback-contract.md`)
+- [X] T016 Update Quickstart guide with Conda steps (`docs/QUICKSTART.md`)
+- [X] T017 Update README with Conda quick‑start snippet
+
 - [X] T001 Initialize a new Git branch `phase1-setup` from `main`
-- [X] T002 [P] Create a Python virtual environment `venv` at the repository root (`python -m venv venv`)
-- [X] T003 [P] Activate the virtual environment and install core dependencies (`venv/bin/pip install -r requirements.txt`)
-- [X] T004 [P] Verify the virtual environment is active (`which python` should point to `./venv/bin/python`)
+- [X] T002 [P] Create a Conda environment `wanis-env` with Python 3.10 (`conda create -n wanis-env python=3.10 -y`)
+- [X] T003 [P] Activate the Conda environment and install core dependencies (`conda activate wanis-env && pip install -r requirements.txt`)
+- [X] T004 [P] Verify the Conda environment is active (`which python` should point to the Conda environment’s bin directory)
 - [X] T005 [P] Create `wanis/static/frontend/package.json` with minimal content:
 ```
 {

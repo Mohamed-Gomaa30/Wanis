@@ -8,7 +8,7 @@ This contract defines the WebSocket interface for browsers without WebAssembly s
 
 - **Version**: 1.0.0
 - **Date**: 2026-04-16
-- **Status**: Draft
+- **Status**: Final
 
 ## Interface Definition
 
