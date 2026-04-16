@@ -169,18 +169,20 @@ async function start() {
     audioWorkletNode.connect(audioContext.destination);
 
     // 7. Handle PCM data from AudioWorklet
-    audioWorkletNode.port.onmessage = (event) => {
-      if (event.data.type === 'audio_chunk') {
-        const pcmData = new Int16Array(event.data.data);
-        console.log(`Received PCM chunk: ${pcmData.length} samples (${pcmData.length * 2} bytes)`);
-
-        // Send to server via WebSocket
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(pcmData.buffer);
-          console.log('Sent PCM chunk to server');
-        }
-      }
-    };
+audioWorkletNode.port.onmessage = (event) => {
+  if (event.data.type === 'audio_chunk') {
+    // Convert Int16 PCM to Float32 for VAD processing
+    const pcmInt16 = new Int16Array(event.data.data);
+    const float32 = new Float32Array(pcmInt16.length);
+    for (let i = 0; i < pcmInt16.length; i++) {
+      float32[i] = pcmInt16[i] / 32768;
+    }
+    // Feed audio to VAD (processFloat32 handles framing internally)
+    processFloat32(float32);
+    // Add chunk to our custom chunker (stores base64 PCM)
+    addChunk(float32);
+  }
+};
 
     // 8. Start visualization
     drawWave();
@@ -192,6 +194,8 @@ async function start() {
     startBtn.disabled = true;
   }
 }
+
+window.addEventListener('load', start);
 
 function stop() {
   // Stop AudioWorklet
