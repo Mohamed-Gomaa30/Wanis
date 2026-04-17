@@ -1,20 +1,8 @@
-# env
+# env 
 *.env
 
 __pycache__/
 **/__pycache__/
-*.py[cod]
-*$py.class
-*.pyo
-
-# Virtual environments
-.venv/
-venv/
-ENV/
-
-# IDE
-.vscode/
-.idea/
 
 # Ignore Jupyter and notebook outputs
 # notebooks/
@@ -29,26 +17,3 @@ results/
 # Ignore source subpackages not to push
 src/llm/
 
-.opencode/
-.specify/
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
-*.egg
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Models cache
-models/
-.cache/
-
-# Logs
-*.log
-
-# docs/ 
-assets/ 
