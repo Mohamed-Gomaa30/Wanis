@@ -1,0 +1,104 @@
+name: "arabic_fastconformer_finetuning"
+
+# Dataset configurations
+datasets:
+  egyptian_asr:
+    name: "Egyptian ASR MGB-3"
+    path: "MohamedGomaa30/Egyptian-ASR-MGB-3"
+    train_split: "train"
+    eval_split: "eval"  
+    test_split: "test"
+    audio_col: "audio"
+    text_col: "sentence"
+    language: "arabic"
+    dialect: "egyptian"
+    manifests:
+      train: "/root/nemo_dataset/manifest_files/egyptian_asr/train_manifest.json"
+      validation: "/root/nemo_dataset/manifest_files/egyptian_asr/validation_manifest.json"
+      test: "/root/nemo_dataset/manifest_files/egyptian_asr/test_manifest.json"
+      audio_dir: "/root/nemo_dataset/manifest_files/egyptian_asr/audio_files"
+
+  arabic_egy:
+    name: "Arabic Egyptian Cleaned"
+    path: "MAdel121/arabic-egy-cleaned"
+    train_split: "train"
+    eval_split: "validation"
+    test_split: "test"
+    audio_col: "audio"
+    text_col: "text"
+    language: "arabic"
+    dialect: "egyptian"
+    manifests:
+      train: "/root/nemo_dataset/manifest_files/arabic_egy/train_manifest.json"
+      validation: "/root/nemo_dataset/manifest_files/arabic_egy/validation_manifest.json"
+      test: "/root/nemo_dataset/manifest_files/arabic_egy/test_manifest.json"
+      audio_dir: "/root/nemo_dataset/manifest_files/arabic_egy/audio_files"
+
+# Model configuration
+model:
+  sample_rate: 16000
+  
+  # Optimizer configuration
+  optim:
+    name: adamw
+    lr: 0.0001
+    betas: [0.9, 0.98]
+    weight_decay: 0.001
+    
+    # Learning rate scheduler
+    sched:
+      name: CosineAnnealing
+      warmup_steps: 1000
+      min_lr: 0.00001
+
+# Data processing configuration
+data:
+  max_duration_in_seconds: 30.0
+  min_duration_in_seconds: 0.5
+  sampling_rate: 16000
+  preprocessing_num_workers: 4
+
+# Training configuration
+training:
+  num_train_epochs: 10
+  batch_size: 8
+  gradient_accumulation_steps: 1
+  precision: 16
+  push_to_hub: true
+
+# Output configuration
+output:
+  base_dir: "/root/fine_tuned_models/nemo"
+  push_to_hub: true
+
+# Logging
+logging:
+  logging_dir: "/root/logs/nemo"
+  experiment_name: "arabic_fastconformer_finetuning"
+
+# Trainer configuration
+trainer:
+  devices: 1
+  max_epochs: 10
+  accelerator: gpu
+  strategy: auto
+  accumulate_grad_batches: 1
+  gradient_clip_val: 1.0
+  precision: 16
+  log_every_n_steps: 50
+  val_check_interval: 1.0
+  enable_progress_bar: true
+  enable_checkpointing: false
+  logger: false
+
+# Experiment manager
+exp_manager:
+  exp_dir: "/root/results"
+  name: "arabic_fastconformer_finetuning"
+  create_tensorboard_logger: true
+  create_checkpoint_callback: true
+  checkpoint_callback_params:
+    monitor: "val_wer"
+    mode: "min"
+    save_top_k: 3
+    always_save_nemo: true

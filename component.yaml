@@ -1,5 +1,0 @@
-name: wanis-demo
-description: Wanis client‑side VAD demo deployed on Lightning.ai
-version: 0.1.0
-runtime: python3.10
-entrypoint: python -m wanis.run_local
