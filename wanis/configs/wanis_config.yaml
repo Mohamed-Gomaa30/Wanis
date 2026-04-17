@@ -24,7 +24,7 @@ audio:
 
 # Speech-to-Text Settings
 stt:
-  model_id: "NAMAA-Space/EgypTalk-ASR-v2"   # HuggingFace model for Egyptian Arabic
+  model_id: "NAMAA-Space/EgypTalk-ASR-v2" # "nvidia/stt_ar_fastconformer_hybrid_large_pcd_v1.0"   # HuggingFace model for Egyptian Arabic
   local_model_path: "models/stt_ar_fastconformer_hybrid_large_pcd_v1.0.nemo"
   language: "ar-EG"
   max_retries: 3
@@ -40,7 +40,7 @@ tts:
 # Voice Activity Detection Settings
 vad:
   model: "silero_vad"
-  threshold: 0.5                            # Speech probability threshold
+  threshold: 0.3                           # Speech probability threshold
   min_speech_ms: 250                        # Minimum speech duration to consider valid
   min_silence_ms: 2000 # Silence duration to mark speech end (2 seconds for real-time transcription)
 
