@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Circular Waveform Demo</title>
+  <link rel="stylesheet" href="style.css" />
+    <style>#controls { display:none; }</style>
+</head>
+<body>
+  <h1>Circular Waveform Visualiser</h1>
+  <div id="controls">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <span id="status">Idle</span>
+</div>
+  <div id="vadIndicator" class="vad-indicator" style="width:120px;height:120px;background:#cccccc;margin:20px auto;border-radius:50%;"></div>
+  <canvas id="waveCanvas" width="400" height="400"></canvas>
+  <div id="transcript" style="margin-top:15px;font-weight:bold;">Transcription will appear here</div>
+
+  <script type="module" src="mediastream_app.js"></script>
+</body>
+</html>
