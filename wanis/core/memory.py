@@ -104,11 +104,10 @@ class DynamicMemory:
         try:
             logger.debug(f"Mem0: Searching for '{query}' as user '{self.user_id}'...")
             
-            params = {
-                "user_id": self.user_id,
-                "limit": limit
+            filters = {
+                "user_id": self.user_id
             }
-            results = self.client.search(query, version="v2", **params)
+            results = self.client.search(query, version="v2", filters=filters, limit=limit)
             
             if isinstance(results, dict) and 'results' in results:
                 results = results['results']
@@ -154,3 +153,9 @@ class MemoryManager:
             return f"{static_prompt}\n\n### [Relevant Past Memories]\n{dynamic_context}"
         
         return static_prompt
+
+# ── Global Instance ──────────────────────────────────────────────
+
+# Shared instance for tools and agents
+_profile_path = os.path.join(os.path.dirname(__file__), "../data/user_profile.json")
+memory_manager = MemoryManager(_profile_path)
