@@ -46,7 +46,7 @@ class StaticMemory:
 class DynamicMemory:
     """Manages evolving user data through Mem0 Cloud API."""
     
-    def __init__(self, user_id: str = "alhajj_ismail"):
+    def __init__(self, user_id: str):
         api_key = os.environ.get("MEM0_API_KEY")
         self.user_id = user_id
         
@@ -58,13 +58,42 @@ class DynamicMemory:
             self.client = None
             self.enabled = False
 
+    async def delete_all(self):
+        """Wipes ALL memories for the current user."""
+        if not self.enabled: return
+        try:
+            self.client.delete_all(user_id=self.user_id)
+            logger.info(f"Memory wiped for user: {self.user_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to reset Mem0 for {self.user_id}: {e}")
+            return False
+
+    async def delete_last(self):
+        """Attempts to remove the most recent memory."""
+        if not self.enabled: return
+        try:
+            mems = self.client.get_all(user_id=self.user_id)
+            if isinstance(mems, dict) and 'results' in mems:
+                mems = mems['results']
+            
+            if not mems: return False
+                
+            last_mem_id = mems[-1]['id']
+            self.client.delete(last_mem_id)
+            logger.info(f"Deleted last memory (ID: {last_mem_id}) for {self.user_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete last memory: {e}")
+            return False
+
     async def add_memory(self, text: str, metadata: Optional[Dict] = None):
         """Adds a text to the dynamic memory."""
         if not self.enabled: return
         
         try:
             self.client.add(text, user_id=self.user_id, metadata=metadata)
-            logger.info(f"Added to dynamic memory: {text[:50]}...")
+            logger.info(f"Added to dynamic memory for {self.user_id}: {text[:50]}...")
         except Exception as e:
             logger.error(f"Failed to add to Mem0 Managed API: {e}")
 
@@ -73,41 +102,45 @@ class DynamicMemory:
         if not self.enabled: return ""
         
         try:
-            # Managed API (v2) requires specific filters format.
-            filters = {
-                "OR": [
-                    {"user_id": self.user_id}
-                ]
-            }
-            results = self.client.search(query, version="v2", filters=filters, limit=limit)
+            logger.debug(f"Mem0: Searching for '{query}' as user '{self.user_id}'...")
             
-            # In Mem0 v2, results is a dict containing a 'results' list
+            params = {
+                "user_id": self.user_id,
+                "limit": limit
+            }
+            results = self.client.search(query, version="v2", **params)
+            
             if isinstance(results, dict) and 'results' in results:
                 results = results['results']
-                
+            
             if not results: return ""
             
-            # Handle results which could be a list of dictionaries or a list of strings
             mem_list = []
             for res in results:
+                text = ""
                 if isinstance(res, dict):
-                    m_text = res.get('memory') or res.get('text')
-                    if m_text:
-                        mem_list.append(f"- {m_text}")
+                    text = res.get('memory') or res.get('text') or res.get('content')
                 elif isinstance(res, str):
-                    mem_list.append(f"- {res}")
+                    text = res
+                if text:
+                    mem_list.append(f"- {text}")
             
             return "\n".join(mem_list)
         except Exception as e:
-            logger.error(f"Failed to search Mem0 Managed API: {e}")
+            logger.error(f"Failed to search Mem0: {e}")
             return ""
 
 class MemoryManager:
     """Orchestrates both Static and Dynamic memory for the Agent."""
     
-    def __init__(self, profile_path: str, user_id: str = "alhajj_ismail"):
+    def __init__(self, profile_path: str):
         self.static = StaticMemory(profile_path)
-        self.dynamic = DynamicMemory(user_id)
+        
+        # Extract user_id dynamically from profile (default to anonymous)
+        # Using the full_name from JSON as requested by USER
+        self.user_id = self.static.data.get("full_name", "anonymous").strip()
+        
+        self.dynamic = DynamicMemory(user_id=self.user_id)
 
     async def get_full_context(self, user_query: str = "") -> str:
         """Builds a combined prompt injection string."""
